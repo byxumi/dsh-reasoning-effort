@@ -43,8 +43,16 @@ To uninstall, send the following:
 ```text
 Could you help me fully uninstall the reasoning-effort plugin from DeepSeek Harness?
 
-Run this single command (cleans pi-ai patches, settings.yaml declarations, and Profile config — all in one step):
-node uninstall.js --all
+Follow these steps:
+1. Find or download the uninstall script (uninstall.js):
+   - If uninstall.js already exists in the current directory or ~/.dsh/, skip the download.
+   - Otherwise download it with curl:
+     curl -fsSL -o uninstall.js https://raw.githubusercontent.com/byxumi/dsh-reasoning-effort/main/uninstall.js
+   - If curl is unavailable (legacy Windows), use PowerShell:
+     Invoke-WebRequest -Uri https://raw.githubusercontent.com/byxumi/dsh-reasoning-effort/main/uninstall.js -OutFile uninstall.js
+2. Run (cleans pi-ai patches, settings.yaml declarations, and Profile config — all in one step):
+   node uninstall.js --all
+3. If node is also unavailable, just tell me "Node.js missing" — don't force-install anything.
 
 Tell me the result and remind me to restart the DSH Web Host.
 ```
