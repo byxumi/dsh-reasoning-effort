@@ -1,4 +1,4 @@
-# dsh-reasoning-effort
+﻿# dsh-reasoning-effort
 
 [**English**](README.en.md) | **中文**
 
@@ -52,8 +52,7 @@ dsh plugin --profile web remove dsh-reasoning-effort
 dsh --profile web --dump-config
 
 告诉我最终结果——dsh-reasoning-effort 是否已从配置中消失。
-如果 settings.yaml 里仍残留推理等级声明，请同时运行（可选）：
-node uninstall.js --all
+注：这条命令会自动清理 pi-ai 补丁、settings.yaml 声明和 Profile 配置，一步完成。
 
 全程不要关闭或重启 DSH；卸载完成后提醒我手动重启 DSH Web Host。
 ```
