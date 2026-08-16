@@ -1,2 +1,7 @@
-- id: reasoning-effort
-  name: dsh-reasoning-effort
+# dsh-reasoning-effort bundle patch.
+# Inserts the reasoning-effort plugin row when this package is mounted as a
+# profile bundle (see package.json "dsh.bundle.patch").
+
+- insert:
+    - id: reasoning-effort
+      name: dsh-reasoning-effort
