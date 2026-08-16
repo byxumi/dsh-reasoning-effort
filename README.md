@@ -39,22 +39,12 @@ Agent 应当返回检查结果和安装状态。如果已经安装，它会告�
 需要卸载时，把下面这段发给 Agent：
 
 ```text
-请帮我从 DeepSeek Harness 的 web Profile 卸载推理强度插件。
+请帮我从 DeepSeek Harness 完全卸载推理强度插件。
 
-先检查一下是否已安装，运行：
-dsh --profile web --dump-config
+只执行下面一条命令即可（会清理 pi-ai 补丁、settings.yaml 推理声明和 Profile 配置，一步到位）：
+node uninstall.js --all
 
-如果输出中已经没有 dsh-reasoning-effort 条目，告诉我"已卸载"即可。
-如果还有，请帮我移除（只操作 web Profile）：
-dsh plugin --profile web remove dsh-reasoning-effort
-
-然后再次确认：
-dsh --profile web --dump-config
-
-告诉我最终结果——dsh-reasoning-effort 是否已从配置中消失。
-注：这条命令会自动清理 pi-ai 补丁、settings.yaml 声明和 Profile 配置，一步完成。
-
-全程不要关闭或重启 DSH；卸载完成后提醒我手动重启 DSH Web Host。
+运行后告诉我结果，并提醒我手动重启 DSH Web Host。
 ```
 
 #### 手动安装
@@ -143,11 +133,15 @@ llm-pi-ai:
 
 ### 卸载
 
+一步完成（清理 pi-ai 补丁 + settings.yaml 推理声明 + Profile 配置）：
+
 ```bash
-dsh plugin --profile web remove dsh-reasoning-effort
-# 或手动脚本:
 node uninstall.js --all
 ```
+
+> 注意：`uninstall.js` 位于插件包内，运行前请先确认当前目录或全局可访问。
+> 如果只想移除 Profile 插件行而不清理配置，可用 `dsh plugin --profile web remove dsh-reasoning-effort`，
+> 但推理声明会保留，需配合上面的脚本才彻底。
 
 ### 问题排查
 
@@ -169,3 +163,4 @@ node uninstall.js --all
 - [贡献指南](CONTRIBUTING.md)
 - [行为准则](CODE_OF_CONDUCT.md)
 - [安全政策](SECURITY.md)
+
