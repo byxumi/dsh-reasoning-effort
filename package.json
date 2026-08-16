@@ -1,6 +1,6 @@
 {
   "name": "dsh-win-reasoning",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "description": "One-click installer that enables reasoning effort selection in the official DSH model selector. Patches pi-ai compat forwarding and writes model capability declarations. Works with any provider and any model on Windows, macOS, Linux.",
   "private": true,
   "bin": {
