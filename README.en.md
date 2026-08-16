@@ -33,6 +33,21 @@ You should see a `dsh-reasoning-effort` entry in the output.
 
 **After installation, manually restart the DSH Web Host for the plugin to take effect.**
 
+#### What the Agent receives
+
+After the plugin is installed and DSH restarts, the Agent automatically gains the following prompt capabilities:
+
+1. **`reasoning-effort` skill registration** — the model can invoke it to view full usage instructions, including:
+   - A table of each level (Off/Low/Medium/High/XHigh/Max) and when to use it
+   - How to adjust reasoning effort via the model selector
+   - The Agent itself cannot change the effort level directly — it should **recommend** the user adjust it through the UI
+
+2. **System prompt injection** — a Reasoning Effort section is added to every conversation's system prompt, so the Agent knows:
+   - Reasoning effort is controlled by the user via the Effort menu in the model selector
+   - When the user asks to think deeper/shallower, the Agent should guide them to adjust the Effort setting
+
+After installation, you can ask the Agent in a new session: *"Can you control reasoning effort?"* — it will confirm it knows the feature and guide you.
+
 ### Method 2: codeload tarball (for restricted networks)
 
 If `github:byxumi/dsh-reasoning-effort#main` fails due to network restrictions, codeload.github.com is usually reachable:
