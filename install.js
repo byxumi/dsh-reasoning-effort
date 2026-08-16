@@ -272,6 +272,46 @@ function findPiAiIndex(cwd) {
     }
   } catch (_) { /* ignore */ }
 
+  // 5) locate via `where dsh` / `which dsh` command
+  //    Covers ANY installation method where dsh is on PATH
+  //    (npm global, pnpm global, yarn, etc.)
+  try {
+    const isWin = process.platform === 'win32'
+    const dshPath = require('child_process').execSync(isWin ? 'where dsh' : 'which dsh', { encoding: 'utf8', timeout: 5000 }).trim().split(/\r?\n/)[0]
+    if (dshPath) {
+      // Walk up from the dsh command directory looking for node_modules/@deepseek-ai/dsh-llm-pi-ai
+      // dshPath examples:
+      //   npm global:  C:\Users\<user>\AppData\Roaming\npm\dsh.cmd
+      //   npx:         C:\Users\<user>\AppData\Local\npm-cache\_npx\<hash>\node_modules\.bin\dsh
+      const dshDir = path.dirname(path.resolve(dshPath))
+      let walk = dshDir
+      for (let i = 0; i < 6; i++) {
+        const nm = path.join(walk, 'node_modules')
+        if (fs.existsSync(nm)) {
+          const c = piAiCandidate(nm)
+          if (fs.existsSync(c)) return c
+          const pnpm = findInPnpmStore(nm)
+          if (pnpm) return pnpm
+        }
+        const parent = path.dirname(walk)
+        if (parent === walk) break
+        walk = parent
+      }
+    }
+  } catch (_) { /* ignore */ }
+
+  // 6) try npm config get cache to find the npm/npx cache directory
+  try {
+    const cachePath = require('child_process').execSync('npm config get cache', { encoding: 'utf8', timeout: 10000 }).trim()
+    if (cachePath) {
+      const npxDir = path.join(cachePath, '_npx')
+      if (fs.existsSync(npxDir)) {
+        const found = scanForPiAi(npxDir, 0, 4)
+        if (found) return found
+      }
+    }
+  } catch (_) { /* ignore */ }
+
   return null
 }
 
