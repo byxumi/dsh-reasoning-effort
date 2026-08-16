@@ -125,8 +125,34 @@ EXAMPLES:
 //  Pi-ai adapter locator
 // ===========================================================================
 
+const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
+
 function piAiCandidate(pkgRoot) {
-  return path.join(pkgRoot, '@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
+  return path.join(pkgRoot, PI_AI_REL)
+}
+
+// pnpm virtual store layout:
+//   <root>/node_modules/.pnpm/@deepseek-ai+dsh-llm-pi-ai@<version>/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
+const PNPM_VSTORE_PATTERNS = [
+  (base) => path.join(base, 'node_modules', '.pnpm', '@deepseek-ai+dsh-llm-pi-ai@latest', 'node_modules', PI_AI_REL),
+]
+
+// Find the pi-ai package inside a pnpm virtual store root.
+// pnpm keeps every dependency under node_modules/.pnpm/<scope>+<name>@<semver>/node_modules/
+function findInPnpmStore(root) {
+  const nm = path.join(root, 'node_modules')
+  const pnpmDir = path.join(nm, '.pnpm')
+  if (!fs.existsSync(pnpmDir)) return null
+  try {
+    const dirs = fs.readdirSync(pnpmDir, { withFileTypes: true })
+    for (const d of dirs) {
+      if (!d.isDirectory()) continue
+      if (!d.name.startsWith('@deepseek-ai+dsh-llm-pi-ai@')) continue
+      const candidate = path.join(pnpmDir, d.name, 'node_modules', PI_AI_REL)
+      if (fs.existsSync(candidate)) return candidate
+    }
+  } catch (_) { /* ignore */ }
+  return null
 }
 
 // DFS scan for the pi-ai package inside a cache root.
@@ -138,11 +164,12 @@ function scanForPiAi(root, depth, maxDepth) {
     for (const e of entries) {
       if (!e.isDirectory()) continue
       const p = path.join(root, e.name)
-      // node_modules at this level
+      // pnpm virtual store inside a node_modules
       if (e.name === 'node_modules') {
         const direct = piAiCandidate(p)
         if (fs.existsSync(direct)) return direct
-        // descent into node_modules subfolders (pnpm virtual store style)
+        const pnpm = findInPnpmStore(p)
+        if (pnpm) return pnpm
         const found = scanForPiAi(p, depth + 1, maxDepth + 1)
         if (found) return found
         continue
@@ -160,10 +187,14 @@ function scanForPiAi(root, depth, maxDepth) {
 
 function findPiAiIndex(cwd) {
   // 1) search up the directory tree from cwd (project-local installs)
+  //    also covers pnpm project stores (node_modules/.pnpm) and npm flat stores
   let dir = path.resolve(cwd)
   for (;;) {
-    const c = path.join(dir, 'node_modules', piAiCandidate(''))
+    const c = path.join(dir, 'node_modules', PI_AI_REL)
     if (fs.existsSync(c)) return c
+    // pnpm project virtual store
+    const pnpmStore = findInPnpmStore(dir)
+    if (pnpmStore) return pnpmStore
     const p = path.dirname(dir)
     if (p === dir) break
     dir = p
@@ -175,19 +206,27 @@ function findPiAiIndex(cwd) {
     // Windows npm/npx
     path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
+    // Windows pnpm
+    path.join(home, 'AppData', 'Local', 'pnpm'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
     path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global', '5', 'node_modules'),
+    path.join(home, 'AppData', 'Roaming', 'pnpm'),
     // macOS / Linux npm
     path.join(home, '.npm', '_npx'),
     path.join(home, '.npm', 'node_modules'),
     path.join('/usr', 'local', 'lib', 'node_modules'),
+    // macOS / Linux pnpm
     path.join('/usr', 'local', 'share', 'pnpm'),
     path.join(home, '.local', 'share', 'pnpm'),
-    path.join('/opt', 'homebrew', 'lib', 'node_modules'),
-    path.join('/usr', 'local', 'lib', 'node_modules'),
-    // pnpm global
-    path.join(home, 'Library', 'pnpm'),
     path.join(home, '.local', 'share', 'pnpm', 'global'),
+    path.join(home, '.local', 'share', 'pnpm', 'global', '5', 'node_modules'),
     path.join(home, '.pnpm-store'),
+    path.join(home, '.pnpm'),
+    // macOS / Linux npm (homebrew / system)
+    path.join('/opt', 'homebrew', 'lib', 'node_modules'),
+    // pnpm mac
+    path.join(home, 'Library', 'pnpm'),
     // yarn
     path.join(home, '.config', 'yarn', 'global', 'node_modules'),
     path.join(home, '.yarn'),
@@ -202,9 +241,11 @@ function findPiAiIndex(cwd) {
       // direct hit: <base>/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
       const direct = piAiCandidate(base)
       if (fs.existsSync(direct)) return direct
-      // DFS two levels deep: covers npx hash dirs, pnpm virtual stores,
-      // scoop apps and chocolatey lib dirs.
-      const found = scanForPiAi(base, 0, 2)
+      // pnpm virtual store at this root
+      const pnpm = findInPnpmStore(base)
+      if (pnpm) return pnpm
+      // DFS deep scan: npx hash dirs, pnpm store dirs, scoop apps, etc.
+      const found = scanForPiAi(base, 0, 4)
       if (found) return found
     } catch (_) { /* ignore */ }
   }
@@ -215,6 +256,19 @@ function findPiAiIndex(cwd) {
     if (globalRoot) {
       const c = piAiCandidate(globalRoot)
       if (fs.existsSync(c)) return c
+      const pnpm = findInPnpmStore(globalRoot)
+      if (pnpm) return pnpm
+    }
+  } catch (_) { /* ignore */ }
+
+  // 4) pnpm root -g (global install location)
+  try {
+    const pnpmRoot = require('child_process').execSync('pnpm root -g', { encoding: 'utf8', timeout: 15000 }).trim()
+    if (pnpmRoot) {
+      const c = piAiCandidate(pnpmRoot)
+      if (fs.existsSync(c)) return c
+      const pnpm = findInPnpmStore(pnpmRoot)
+      if (pnpm) return pnpm
     }
   } catch (_) { /* ignore */ }
 
