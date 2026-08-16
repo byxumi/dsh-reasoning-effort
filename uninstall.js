@@ -31,7 +31,7 @@ const os = require('os')
 // ===========================================================================
 
 const PKG = 'dsh-win-reasoning'
-const VERSION = '1.1.3'
+const VERSION = '1.1.6'
 const BACKUP_SUFFIX = '.dsh-reasoning.bak'
 const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
 
