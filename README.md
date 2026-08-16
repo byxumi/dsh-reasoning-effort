@@ -2,6 +2,9 @@
 
 [**English**](README.en.md) | **中文**
 
+> [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+> [![GitHub Repo](https://img.shields.io/github/stars/byxumi/dsh-reasoning-effort?style=social)](https://github.com/byxumi/dsh-reasoning-effort)
+
 一个正式的 DSH 插件，让官方内置的模型选择器支持**推理强度（Reasoning Effort）**选择。支持任何 provider、任何模型；通过 `dsh plugin` 一键安装。
 
 ---
@@ -132,3 +135,9 @@ node uninstall.js --all
 ## License
 
 [MIT](LICENSE)
+
+## 社区文档
+
+- [贡献指南](CONTRIBUTING.md)
+- [行为准则](CODE_OF_CONDUCT.md)
+- [安全政策](SECURITY.md)
