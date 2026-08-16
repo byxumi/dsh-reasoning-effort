@@ -35,7 +35,7 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           PKG="dsh-reasoning-effort-${TAG}.zip"
           mkdir -p dist
-          cp -r lib patch.yml install.js install.bat uninstall.js uninstall.bat README.md README.en.md LICENSE package.json dist/
+          cp -r lib patch.yml install.js install.bat uninstall.js uninstall.bat README.md README.en.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md LICENSE package.json dist/
           cd dist
           zip -r "../${PKG}" ./*
           cd ..
