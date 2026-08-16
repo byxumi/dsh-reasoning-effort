@@ -16,31 +16,43 @@ A DSH plugin that enables **reasoning effort selection** in the official model s
 If your current Agent can execute terminal commands, send the following text verbatim to it:
 
 ```text
-Please install the dsh-reasoning-effort plugin for the DeepSeek Harness "web" Profile.
+Could you help me install the reasoning-effort plugin for the DeepSeek Harness "web" Profile?
 
-Run only the two commands below. Do not modify any other Profile:
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+First, check whether it's already there:
 dsh --profile web --dump-config
 
-Confirm that dsh-reasoning-effort appears in the output and tell me the result.
-Do NOT shut down or restart the running DSH; remind me to manually restart the DSH Web Host when done.
+If dsh-reasoning-effort already appears in the output, just tell me "already installed" and stop.
+If not, install it (only modify the web Profile, leave others alone):
+dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+
+After installation, verify again:
+dsh --profile web --dump-config
+
+Tell me the result — whether dsh-reasoning-effort now appears in the config.
+Do NOT shut down or restart the running DSH process; remind me to manually restart the DSH Web Host afterwards.
 ```
 
-The Agent should return the installation result and tell you whether `dsh-reasoning-effort` appears in the config.
+The Agent should check first, then install if needed, and report the final status.
 
 #### Prompt for Agent (uninstall)
 
-To uninstall, send the following to the Agent:
+To uninstall, send the following:
 
 ```text
-Please uninstall the dsh-reasoning-effort plugin from the DeepSeek Harness "web" Profile.
+Could you help me remove the reasoning-effort plugin from the DeepSeek Harness "web" Profile?
 
-Run only the two commands below. Do not modify any other Profile:
-dsh plugin --profile web remove dsh-reasoning-effort
+First, check whether it's still there:
 dsh --profile web --dump-config
 
-Confirm that dsh-reasoning-effort no longer appears in the output and tell me the result.
-Do NOT shut down or restart the running DSH; remind me to manually restart the DSH Web Host when done.
+If dsh-reasoning-effort is already gone, just tell me "already uninstalled" and stop.
+If it's still there, remove it (only modify the web Profile):
+dsh plugin --profile web remove dsh-reasoning-effort
+
+Then verify again:
+dsh --profile web --dump-config
+
+Tell me the result — whether dsh-reasoning-effort has disappeared from the config.
+Do NOT shut down or restart the DSH process; remind me to manually restart the DSH Web Host when done.
 ```
 
 #### Manual install
