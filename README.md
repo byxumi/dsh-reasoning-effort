@@ -153,6 +153,16 @@ llm-pi-ai:
 
 ### 卸载
 
+**一键卸载：** 双击 `uninstall.bat`，或运行：
+
+```bash
+node uninstall.js --all                    # 恢复补丁 + 删除所有声明
+node uninstall.js --pi-ai-only             # 只恢复补丁，不改 settings
+node uninstall.js --provider 你的网关 --models 模型A,模型B  # 只删除指定模型
+node uninstall.js --dry-run --all          # 预览不改动
+```
+
+**手动卸载：**
 1. 删除 `settings.yaml` 里你添加的模型声明
 2. 恢复 pi-ai 补丁：把 `lib/index.js.dsh-reasoning.bak` 改回 `lib/index.js`
 
@@ -289,6 +299,16 @@ llm-pi-ai:
 
 ### Uninstall
 
+**One-click:** Double-click `uninstall.bat`, or run:
+
+```bash
+node uninstall.js --all                    # restore patch + remove all declarations
+node uninstall.js --pi-ai-only             # only restore patch, skip settings
+node uninstall.js --provider mygw --models m1,m2  # remove specific model decls
+node uninstall.js --dry-run --all          # preview without changing
+```
+
+**Manual:**
 1. Remove model declarations from `settings.yaml`
 2. Restore pi-ai patch: rename `lib/index.js.dsh-reasoning.bak` back to `lib/index.js`
 
