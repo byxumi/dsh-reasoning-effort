@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release package
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          PKG="dsh-win-reasoning-${TAG}.zip"
+          mkdir -p dist
+          cp install.js install.bat README.md LICENSE package.json dist/
+          cd dist
+          zip -r "../${PKG}" ./*
+          cd ..
+          echo "PKG=${PKG}" >> $GITHUB_ENV
+          echo "ARTIFACT=${PKG}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: ${{ env.PKG }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: dsh-win-reasoning ${{ steps.version.outputs.tag }}
+          body: |
+            ## dsh-win-reasoning ${{ steps.version.outputs.tag }}
+
+            DSH reasoning effort installer — enables reasoning effort selection in the official DSH model selector.
+
+            ### 📦 Contains
+            - `install.js` — cross-platform installer script
+            - `install.bat` — Windows double-click launcher
+            - `README.md` — full documentation
+            - `LICENSE` — MIT license
+            - `package.json` — npm package descriptor
+
+            ### 🚀 Quick Start
+            ```bash
+            # Windows: double-click install.bat, or:
+            node install.js --off
+
+            # macOS / Linux:
+            node install.js --off
+            ```
+          files: ${{ env.PKG }}
+          draft: false
+          prerelease: false
