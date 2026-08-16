@@ -52,6 +52,8 @@ Then verify again:
 dsh --profile web --dump-config
 
 Tell me the result — whether dsh-reasoning-effort has disappeared from the config.
+If reasoning effort declarations still remain in settings.yaml, also run (optional):
+node uninstall.js --all
 Do NOT shut down or restart the DSH process; remind me to manually restart the DSH Web Host when done.
 ```
 
