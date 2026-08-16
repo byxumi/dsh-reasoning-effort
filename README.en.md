@@ -48,6 +48,84 @@ After the plugin is installed and DSH restarts, the Agent automatically gains th
 
 After installation, you can ask the Agent in a new session: *"Can you control reasoning effort?"* — it will confirm it knows the feature and guide you.
 
+#### Prompt template for AI (install)
+
+Copy and paste the following verbatim to let an AI (DeepSeek / Claude / any model) install it for you:
+
+<details>
+<summary>📋 Click to copy — Agent install prompt</summary>
+
+```text
+Please install the dsh-reasoning-effort reasoning-effort plugin for the DeepSeek Harness "web" Profile.
+
+## Goal
+Enable reasoning effort (Effort: off/low/medium/high/xhigh/max) selection in the official model selector.
+
+## Steps
+1. Check whether it is already installed: run `dsh --profile web --dump-config` and look for a
+   dsh-reasoning-effort entry. If present, tell me "plugin already installed" and skip step 2.
+2. Install (run ONLY this command; do not modify any other Profile):
+   dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
+
+## Error handling
+- If the command fails with ERR_PNPM_IGNORED_BUILDS or asks to approve build scripts:
+  - Open ~/.dsh/profiles/web/pnpm-workspace.yaml
+  - Under allowBuilds, change the dsh-reasoning-effort@... key from "set this to true or false" to true
+  - Re-run step 2
+- If codeload is unreachable, fall back to:
+  dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
+
+## Verification
+Run `dsh --profile web --dump-config` and confirm the output contains:
+  # == dsh-reasoning-effort
+  - id: reasoning-effort
+    name: dsh-reasoning-effort
+
+## Constraints
+- Do NOT shut down or restart the running DSH process.
+- Do NOT modify any Profile other than "web".
+- After finishing, remind me to manually restart the DSH Web Host and report the result.
+```
+
+</details>
+
+#### Prompt template for AI (uninstall)
+
+Copy and paste the following verbatim to let an AI uninstall it for you:
+
+<details>
+<summary>📋 Click to copy — Agent uninstall prompt</summary>
+
+```text
+Please uninstall the dsh-reasoning-effort reasoning-effort plugin from the DeepSeek Harness "web" Profile.
+
+## Goal
+Remove the reasoning effort plugin, restoring DSH to its original state while keeping the user's other config.
+
+## Steps
+1. Confirm it is installed: run `dsh --profile web --dump-config` and look for dsh-reasoning-effort.
+   If absent, tell me "plugin not installed" and stop.
+2. Remove the plugin (run ONLY this command; do not modify any other Profile):
+   dsh plugin --profile web remove dsh-reasoning-effort
+
+## Fallback (if remove fails due to network/dependency issues)
+- If remove fails, manually edit ~/.dsh/profiles/web/package.json:
+  - Delete the dsh-reasoning-effort line from dependencies
+  - Delete dsh-reasoning-effort from dsh.profile.bundles
+  - Then run: dsh plugin --profile web install
+- If pnpm asks to approve build scripts, you may keep that key under allowBuilds in pnpm-workspace.yaml.
+
+## Verification
+Run `dsh --profile web --dump-config` and confirm dsh-reasoning-effort no longer appears.
+
+## Constraints
+- Do NOT shut down or restart the running DSH process.
+- Do NOT modify any Profile other than "web".
+- After finishing, remind me to manually restart the DSH Web Host and report the result.
+```
+
+</details>
+
 ### Method 2: codeload tarball (for restricted networks)
 
 If `github:byxumi/dsh-reasoning-effort#main` fails due to network restrictions, codeload.github.com is usually reachable:
