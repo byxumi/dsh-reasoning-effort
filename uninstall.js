@@ -31,7 +31,7 @@ const os = require('os')
 // ===========================================================================
 
 const PKG = 'dsh-win-reasoning'
-const VERSION = '1.1.6'
+const 1.1.7
 const BACKUP_SUFFIX = '.dsh-reasoning.bak'
 const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
 
@@ -215,13 +215,26 @@ function restorePiAiPatch(indexPath, dryRun) {
     // Line-based reverse patch — more robust than exact string matching
     const lines = src.split('\n')
     const newLines = []
-    let inCompatReturn = false
-    let inHeadCheck = false
-    let headCheckLine = -1
     let removed = 0
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const trimmed = line.trim()
+      // Skip the 3 extra variable declarations from the head section
+      if (trimmed.startsWith('const supportsDeveloperRole =') ||
+          trimmed.startsWith('const supportsStore =') ||
+          trimmed.startsWith('const maxTokensField =')) {
+        removed++
+        continue
+      }
+      // Replace the extra if condition with the original one
+      if (trimmed === 'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};') {
+        newLines.push(line.replace(
+          'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};',
+          'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0) return {};'
+        ))
+        removed++
+        continue
+      }
       // Detect the return block of resolveModelCompat
       if (trimmed === 'return { compat: {' && !inCompatReturn) {
         inCompatReturn = true
