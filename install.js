@@ -185,6 +185,82 @@ function scanForPiAi(root, depth, maxDepth) {
   return null
 }
 
+// Recursive search for the pi-ai package by directory name.
+// Walks all directories under `root` looking for a folder named `dsh-llm-pi-ai`
+// with a `lib/index.js` inside. Capped at `maxScanned` entries to avoid
+// hanging on content-addressed stores (pnpm store, git, etc.).
+// Depth is limited to 15 to avoid scanning the entire filesystem.
+function findPiAiByPackageName(root, maxScanned, depth) {
+  if (maxScanned === undefined) maxScanned = 50000
+  if (depth === undefined) depth = 0
+  if (depth > 15) return null
+  let limit = maxScanned
+  try {
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      if (limit-- <= 0) return null
+      const p = path.join(root, e.name)
+      // Skip pnpm content-addressed store, git, etc.
+      if ((e.name === 'files' || e.name === 'store') && p.includes('pnpm' + path.sep + 'store')) continue
+      if (e.name === '.git' || e.name === 'node_modules' && depth === 0) continue
+      if (e.name === 'dsh-llm-pi-ai') {
+        const candidate = path.join(p, 'lib', 'index.js')
+        if (fs.existsSync(candidate)) return candidate
+        continue
+      }
+      const found = findPiAiByPackageName(p, limit, depth + 1)
+      if (found) return found
+    }
+  } catch (_) { /* ignore */ }
+  return null
+}
+
+// Try to locate the pi-ai package by reading the pnpm global bin shim.
+// pnpm's global bin shim (e.g. %LOCALAPPDATA%\pnpm\bin\dsh.cmd) contains
+// a reference to the actual DSH package path. We parse it and walk up.
+function findPiAiViaPnpmShim(home) {
+  const binDirs = [
+    path.join(home, 'AppData', 'Local', 'pnpm', 'bin'),
+    path.join(home, '.local', 'share', 'pnpm', 'bin'),
+    path.join('/usr', 'local', 'share', 'pnpm', 'bin'),
+  ]
+  for (const binDir of binDirs) {
+    if (!fs.existsSync(binDir)) continue
+    // Look for the dsh shim (dsh.cmd on Windows, dsh on Unix)
+    const shimName = process.platform === 'win32' ? 'dsh.cmd' : 'dsh'
+    const shimPath = path.join(binDir, shimName)
+    if (!fs.existsSync(shimPath)) continue
+    try {
+      const content = fs.readFileSync(shimPath, 'utf8')
+      // The shim usually contains a path like "node_modules\@deepseek-ai\dsh\..."
+      // or references the global directory. Try to extract a path.
+      const match = content.match(/["']([^"']*node_modules[^"']*dsh[^"']*?)["']/i)
+      if (match) {
+        const refPath = path.resolve(binDir, match[1])
+        // Walk up from the dsh package to find pi-ai
+        let walk = path.dirname(refPath)
+        for (let i = 0; i < 4; i++) {
+          const nm = path.join(walk, 'node_modules')
+          if (fs.existsSync(nm)) {
+            const c = piAiCandidate(nm)
+            if (fs.existsSync(c)) return c
+            const pnpm = findInPnpmStore(nm)
+            if (pnpm) return pnpm
+          }
+          const parent = path.dirname(walk)
+          if (parent === walk) break
+          walk = parent
+        }
+      }
+      // Also try pi-ai candidate relative to the bin dir
+      const candidate = piAiCandidate(path.join(path.dirname(binDir), 'global', '5', 'node_modules'))
+      if (fs.existsSync(candidate)) return candidate
+    } catch (_) { /* ignore */ }
+  }
+  return null
+}
+
 function findPiAiIndex(cwd) {
   // 1) search up the directory tree from cwd (project-local installs)
   //    also covers pnpm project stores (node_modules/.pnpm) and npm flat stores
@@ -310,6 +386,30 @@ function findPiAiIndex(cwd) {
         if (found) return found
       }
     }
+  } catch (_) { /* ignore */ }
+
+  // 7) deep recursive search by package directory name
+  //    Covers pnpm virtual stores, deeply nested npx caches, and any other layout.
+  //    Searches for the directory named "dsh-llm-pi-ai" itself, unlimited depth.
+  for (const base of [
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
+    path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
+    path.join(home, '.npm', '_npx'),
+    path.join(home, '.local', 'share', 'pnpm', 'global'),
+    path.join('/usr', 'local', 'share', 'pnpm', 'global'),
+  ]) {
+    if (!fs.existsSync(base)) continue
+    try {
+      const found = findPiAiByPackageName(base)
+      if (found) return found
+    } catch (_) { /* ignore */ }
+  }
+
+  // 8) pnpm bin shim parser
+  try {
+    const found = findPiAiViaPnpmShim(home)
+    if (found) return found
   } catch (_) { /* ignore */ }
 
   return null
