@@ -420,8 +420,30 @@ function findPiAiIndex(cwd) {
 // ===========================================================================
 
 function applyPiAiPatch(indexPath, dryRun) {
-  const src = fs.readFileSync(indexPath, 'utf8')
-  if (src.includes(PATCH_MARKER)) return { status: 'already' }
+  let src = fs.readFileSync(indexPath, 'utf8')
+  const hasPatchMarker = src.includes(PATCH_MARKER)
+  const hasPatchedHead = src.includes('const supportsDeveloperRole = entry.compat?.supportsDeveloperRole')
+  const hasOriginalHead = src.includes(ORIGINAL_HEAD)
+
+  // Fully patched
+  if (hasPatchMarker && hasPatchedHead) return { status: 'already' }
+
+  // Mixed state: head is patched but return block is original (from incomplete uninstall)
+  if (hasPatchedHead && !hasPatchMarker) {
+    // Remove the 3 extra variable declarations from the head
+    const lines = src.split('\n').filter(l => {
+      const t = l.trim()
+      return !t.startsWith('const supportsDeveloperRole =') &&
+             !t.startsWith('const supportsStore =') &&
+             !t.startsWith('const maxTokensField =')
+    })
+    // Also fix the if condition (remove extra checks)
+    const cleaned = lines.join('\n').replace(
+      /if \(thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0\)/,
+      'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0)'
+    )
+    src = cleaned
+  }
 
   if (!src.includes(ORIGINAL_HEAD)) {
     throw new Error(
@@ -664,10 +686,35 @@ function main() {
   const settingsPath = args.settings || defaultSettingsPath()
   log(`[2/2] settings: ${settingsPath}`)
 
-  const provider = args.provider
-  const models = args.models ? args.models.split(',').map(s => s.trim()).filter(Boolean) : []
+  let provider = args.provider
+  let models = args.models ? args.models.split(',').map(s => s.trim()).filter(Boolean) : []
+  let autoDetected = false
 
-  if (provider && models.length > 0) {
+  // Auto-detect provider/models from settings.yaml when not explicitly given
+  if (!provider || models.length === 0) {
+    if (fs.existsSync(settingsPath)) {
+      const existingText = fs.readFileSync(settingsPath, 'utf8')
+      const sections = parsePiAiSections(existingText)
+      if (sections.length > 0) {
+        // Auto-detect all providers and their models
+        for (const sec of sections) {
+          const missingModels = sec.models.filter(m => !modelHasReasoningEfforts(existingText, sec.provider, m.modelId)).map(m => m.modelId)
+          if (missingModels.length === 0) continue
+          autoDetected = true
+          log(`  ℹ Auto-detected provider "${sec.provider}" — writing declarations for: ${missingModels.join(', ')}`)
+          try {
+            const r = mergeSettings(settingsPath, sec.provider, missingModels, args.dryRun)
+            log('  ' + ({ already: '✓ already declared', merged: '✓ updated', 'would-merge': '✓ would update (dry-run)' }[r.status] || r.status))
+          } catch (e) { warn(e.message) }
+        }
+        // If no provider was specified, set a flag to skip the generic block
+        if (!args.provider) { provider = '__auto__'; models = [] }
+      }
+    }
+  }
+
+  // If we still have a specific provider/models to write (from --provider/--models or fallback)
+  if (provider && provider !== '__auto__' && models.length > 0) {
     try {
       const r = mergeSettings(settingsPath, provider, models, args.dryRun)
       const statusMap = { already: '✓ already declared, skipping', merged: '✓ updated', 'would-merge': '✓ would update (dry-run)' }
@@ -688,12 +735,14 @@ function main() {
       }
     }
   } else {
-    log('  No --provider / --models given. Skipping automatic settings write.')
-    printTemplate()
-    log('\nTo write config automatically:')
-    log('  node install.js --provider <name> --models <model1,model2>')
-    log('To preview changes:')
-    log('  node install.js --dry-run --provider <name> --models <model1,model2>')
+    if (!autoDetected) {
+      log('  No existing pi-ai provider/models found in settings.yaml.')
+      printTemplate()
+      log('\nTo write config automatically:')
+      log('  node install.js --provider <name> --models <model1,model2>')
+      log('To preview changes:')
+      log('  node install.js --dry-run --provider <name> --models <model1,model2>')
+    }
   }
 }
 
