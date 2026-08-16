@@ -366,9 +366,9 @@ function main() {
   log(`[1/2] pi-ai adapter: ${piAiIndex}`)
   try {
     const r = applyPiAiPatch(piAiIndex, args.dryRun)
-    if (r.status === 'already') log('  \\u2713 patch already applied, skipping')
-    else if (r.status === 'would-patch') log('  \\u2713 would patch (dry-run)')
-    else log('  \\u2713 patched (backup: ' + r.backup + ')')
+    if (r.status === 'already') log('  ✓ patch already applied, skipping')
+    else if (r.status === 'would-patch') log('  ✓ would patch (dry-run)')
+    else log('  ✓ patched (backup: ' + r.backup + ')')
   } catch (e) { die(e.message) }
 
   // --- List mode ---
@@ -395,7 +395,7 @@ function main() {
   if (provider && models.length > 0) {
     try {
       const r = mergeSettings(settingsPath, provider, models, args.dryRun)
-      const statusMap = { already: '\\u2713 already declared, skipping', merged: '\\u2713 updated', 'would-merge': '\\u2713 would update (dry-run)' }
+      const statusMap = { already: '✓ already declared, skipping', merged: '✓ updated', 'would-merge': '✓ would update (dry-run)' }
       log('  ' + (statusMap[r.status] || r.status))
     } catch (e) { die(e.message) }
 
