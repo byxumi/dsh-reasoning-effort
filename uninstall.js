@@ -145,13 +145,39 @@ function scanForPiAi(root, depth, maxDepth) {
   return null
 }
 
-function findPiAiIndex(cwd) {
+// ===========================================================================
+//  Multi-location discovery (mirrors install.js)
+// ===========================================================================
+
+// Find the pi-ai package inside a pnpm virtual store root.
+function findInPnpmStore(root) {
+  const pnpmDir = path.join(root, 'node_modules', '.pnpm')
+  if (!fs.existsSync(pnpmDir)) return null
+  try {
+    const dirs = fs.readdirSync(pnpmDir, { withFileTypes: true })
+    for (const d of dirs) {
+      if (!d.isDirectory()) continue
+      if (!d.name.startsWith('@deepseek-ai+dsh-llm-pi-ai@')) continue
+      const candidate = path.join(pnpmDir, d.name, 'node_modules', PI_AI_REL)
+      if (fs.existsSync(candidate)) return candidate
+    }
+  } catch (_) { /* ignore */ }
+  return null
+}
+
+// Find ALL pi-ai package locations. Returns array of index.js paths (deduplicated).
+function findAllPiAiLocations(cwd) {
+  const found = new Map()
+  function add(p) {
+    if (p && fs.existsSync(p)) {
+      const norm = path.resolve(p)
+      if (!found.has(norm)) found.set(norm, true)
+    }
+  }
   let dir = path.resolve(cwd)
   for (;;) {
-    const c = path.join(dir, 'node_modules', PI_AI_REL)
-    if (fs.existsSync(c)) return c
-    const pnpm = findInPnpmStore(dir)
-    if (pnpm) return pnpm
+    add(path.join(dir, 'node_modules', PI_AI_REL))
+    add(findInPnpmStore(dir))
     const p = path.dirname(dir)
     if (p === dir) break
     dir = p
@@ -160,37 +186,132 @@ function findPiAiIndex(cwd) {
   const roots = [
     path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
-    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
     path.join(home, 'AppData', 'Local', 'pnpm'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global', '5', 'node_modules'),
+    // Desktop Electron runtimes
+    ...desktopRuntimeRoots(),
     path.join(home, '.npm', '_npx'),
     path.join(home, '.npm', 'node_modules'),
-    path.join(home, '.local', 'share', 'pnpm', 'global'),
-    path.join(home, '.local', 'share', 'pnpm'),
     path.join('/usr', 'local', 'lib', 'node_modules'),
     path.join('/usr', 'local', 'share', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm', 'global'),
+    path.join(home, '.local', 'share', 'pnpm', 'global', '5', 'node_modules'),
+    path.join(home, '.pnpm-store'),
+    path.join(home, '.pnpm'),
     path.join('/opt', 'homebrew', 'lib', 'node_modules'),
+    path.join(home, 'Library', 'pnpm'),
+    path.join(home, '.config', 'yarn', 'global', 'node_modules'),
+    path.join(home, '.yarn'),
+    path.join(home, 'scoop', 'apps'),
+    path.join('C:', 'ProgramData', 'chocolatey', 'lib'),
   ]
+  try {
+    const g = require('child_process').execSync('npm root -g', { encoding: 'utf8', timeout: 10000 }).trim()
+    if (g) roots.push(g)
+  } catch (_) { /* ignore */ }
+
   for (const base of roots) {
-    if (!fs.existsSync(base)) continue
+    if (!base || !fs.existsSync(base)) continue
     try {
-      const direct = piAiCandidate(base)
-      if (fs.existsSync(direct)) return direct
-      const pnpm = findInPnpmStore(base)
-      if (pnpm) return pnpm
-      const found = scanForPiAi(base, 0, 6)
-      if (found) return found
+      add(piAiCandidate(base))
+      add(findInPnpmStore(base))
+      collectScan(base, add, 0, 4)
     } catch (_) { /* ignore */ }
   }
+
+  // where dsh / which dsh
   try {
-    const globalRoot = require('child_process').execSync('npm root -g', { encoding: 'utf8', timeout: 10000 }).trim()
-    if (globalRoot) {
-      const c = piAiCandidate(globalRoot)
-      if (fs.existsSync(c)) return c
-      const pnpm = findInPnpmStore(globalRoot)
-      if (pnpm) return pnpm
+    const isWin = process.platform === 'win32'
+    const outs = require('child_process').execSync(isWin ? 'where dsh' : 'which dsh', { encoding: 'utf8', timeout: 5000 })
+    const dshPaths = outs.split(/\r?\n/).filter(s => s.trim())
+    for (const dshPath of dshPaths.slice(0, 3)) {
+      if (!dshPath) continue
+      let real = dshPath
+      try { real = fs.realpathSync(dshPath) } catch (_) { /* keep original */ }
+      const dshDir = path.dirname(path.resolve(real))
+      let walk = dshDir
+      for (let i = 0; i < 8; i++) {
+        const nm = path.join(walk, 'node_modules')
+        if (fs.existsSync(nm)) {
+          add(piAiCandidate(nm))
+          add(findInPnpmStore(nm))
+          const dshPkg = path.join(nm, '@deepseek-ai', 'dsh')
+          if (fs.existsSync(dshPkg)) {
+            add(piAiCandidate(path.join(dshPkg, 'node_modules')))
+          }
+        }
+        const parent = path.dirname(walk)
+        if (parent === walk) break
+        walk = parent
+      }
+      add(piAiCandidate(path.join(dshDir, 'node_modules')))
     }
   } catch (_) { /* ignore */ }
-  return null
+
+  // pnpm root -g
+  try {
+    const pr = require('child_process').execSync('pnpm root -g', { encoding: 'utf8', timeout: 10000 }).trim()
+    if (pr) { add(piAiCandidate(pr)); add(findInPnpmStore(pr)) }
+  } catch (_) { /* ignore */ }
+
+  // require.resolve
+  try {
+    const r = require.resolve('@deepseek-ai/dsh-llm-pi-ai/lib/index')
+    if (r) add(r)
+  } catch (_) { /* ignore */ }
+
+  return Array.from(found.keys())
+}
+
+// Desktop Electron app runtime heuristic
+function desktopRuntimeRoots() {
+  const roots = []
+  const candidates = []
+  for (const d of ['D:', 'C:', 'E:', 'F:']) {
+    if (fs.existsSync(d + path.sep)) candidates.push(d + path.sep)
+  }
+  for (const base of candidates) {
+    try {
+      const top = fs.readdirSync(base, { withFileTypes: true })
+      for (const e of top) {
+        if (!e.isDirectory()) continue
+        const rt = path.join(base, e.name, 'resources', 'runtime', 'node_modules')
+        if (fs.existsSync(rt)) roots.push(rt)
+        else if (fs.existsSync(path.join(base, e.name, 'resources', 'app', 'node_modules'))) {
+          roots.push(path.join(base, e.name, 'resources', 'app', 'node_modules'))
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return roots
+}
+
+// Collect every matching index.js under root
+function collectScan(root, add, depth, maxDepth) {
+  if (depth > maxDepth) return
+  try {
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      const p = path.join(root, e.name)
+      if (e.name === 'node_modules') {
+        add(piAiCandidate(p))
+        add(findInPnpmStore(p))
+        collectScan(p, add, depth + 1, maxDepth + 1)
+        continue
+      }
+      add(piAiCandidate(p))
+      collectScan(p, add, depth + 1, maxDepth)
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function findPiAiIndex(cwd) {
+  const all = findAllPiAiLocations(cwd)
+  return all.length > 0 ? all[0] : null
 }
 
 // ===========================================================================
@@ -428,23 +549,28 @@ function main() {
 
   console.log(`=== ${PKG} Uninstaller ===\n`)
 
-  // --- 1. Restore pi-ai patch ---
-  let piAiIndex = args.piAi || findPiAiIndex(cwd)
-  if (piAiIndex) {
-    const r = restorePiAiPatch(piAiIndex, args.dryRun)
-    const msgs = {
-      'restored': '  🗑 pi-ai patch restored from backup',
-      'would-restore': '  🗑 would restore backup (dry-run)',
-      'no-backup-unpatched': '  (no patch found — already reverted)',
-      'no-backup-reverse-failed': '  ⚠ patch found but reverse patch failed (no backup available)',
-      'no-backup-reverse-error': '  ⚠ reverse patch error: ' + (r.error || ''),
-      'reverse-restored': '  🗑 pi-ai patch reverted (no backup was available, applied reverse patch)',
-      'would-reverse': '  🗑 would revert patch (dry-run, no backup)',
-    }
-    console.log('[1/2] pi-ai adapter: ' + piAiIndex)
-    console.log(msgs[r.status] || '  ' + r.status)
+  // --- 1. Restore pi-ai patch (all found locations) ---
+  const piAiLocations = args.piAi ? [args.piAi] : findAllPiAiLocations(cwd)
+  if (piAiLocations.length === 0) {
+    console.log('[1/1] pi-ai adapter: not found. Skipping.')
   } else {
-    console.log('[1/2] pi-ai adapter: not found. Skipping.')
+    const n = piAiLocations.length
+    console.log(`[1/${n + 1}] pi-ai adapter (${n} installs found)`)
+    for (const loc of piAiLocations) {
+      const r = restorePiAiPatch(loc, args.dryRun)
+      const msgs = {
+        'restored': '      🗑 restored from backup',
+        'would-restore': '      🗑 would restore backup (dry-run)',
+        'no-backup-unpatched': '      (no patch found — already reverted)',
+        'no-backup-reverse-failed': '      ⚠ patch found but reverse failed (no backup)',
+        'no-backup-reverse-error': '      ⚠ reverse error: ' + (r.error || ''),
+        'reverse-restored': '      🗑 reverted via reverse patch (no backup)',
+        'would-reverse': '      🗑 would revert (dry-run, no backup)',
+      }
+      console.log('  ' + loc)
+      console.log(msgs[r.status] || '  ' + r.status)
+      if (args.dryRun && r.status === 'would-restore') console.log('    (would restore backup: ' + r.backup + ')')
+    }
   }
 
   if (args.piAiOnly) {

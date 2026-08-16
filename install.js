@@ -140,8 +140,7 @@ const PNPM_VSTORE_PATTERNS = [
 // Find the pi-ai package inside a pnpm virtual store root.
 // pnpm keeps every dependency under node_modules/.pnpm/<scope>+<name>@<semver>/node_modules/
 function findInPnpmStore(root) {
-  const nm = path.join(root, 'node_modules')
-  const pnpmDir = path.join(nm, '.pnpm')
+  const pnpmDir = path.join(root, 'node_modules', '.pnpm')
   if (!fs.existsSync(pnpmDir)) return null
   try {
     const dirs = fs.readdirSync(pnpmDir, { withFileTypes: true })
@@ -155,34 +154,167 @@ function findInPnpmStore(root) {
   return null
 }
 
-// DFS scan for the pi-ai package inside a cache root.
-// Checks <dir>/@deepseek-ai/... and <dir>/node_modules/@deepseek-ai/... at each level.
-function scanForPiAi(root, depth, maxDepth) {
-  if (depth > maxDepth) return null
+// Find ALL pi-ai package locations. Returns array of index.js paths (deduplicated).
+// Covers: npm global (nested inside dsh), npx cache, desktop Electron runtime,
+// project-local, pnpm stores, and `where dsh` resolution.
+function findAllPiAiLocations(cwd) {
+  const found = new Map() // path -> true, to dedupe
+
+  function add(p) {
+    if (p && fs.existsSync(p)) {
+      const norm = path.resolve(p)
+      if (!found.has(norm)) found.set(norm, true)
+    }
+  }
+
+  // 1) search up the directory tree (project-local installs)
+  let dir = path.resolve(cwd)
+  for (;;) {
+    add(path.join(dir, 'node_modules', PI_AI_REL))
+    add(findInPnpmStore(dir))
+    const p = path.dirname(dir)
+    if (p === dir) break
+    dir = p
+  }
+
+  const home = os.homedir()
+  const roots = [
+    // Windows npm/npx
+    path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
+    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
+    // Windows pnpm
+    path.join(home, 'AppData', 'Local', 'pnpm'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'global', '5', 'node_modules'),
+    // Desktop Electron apps: <dir>/resources/runtime/node_modules
+    ...desktopRuntimeRoots(),
+    // macOS / Linux npm
+    path.join(home, '.npm', '_npx'),
+    path.join(home, '.npm', 'node_modules'),
+    path.join('/usr', 'local', 'lib', 'node_modules'),
+    // macOS / Linux pnpm
+    path.join('/usr', 'local', 'share', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm', 'global'),
+    path.join(home, '.local', 'share', 'pnpm', 'global', '5', 'node_modules'),
+    path.join(home, '.pnpm-store'),
+    path.join(home, '.pnpm'),
+    path.join('/opt', 'homebrew', 'lib', 'node_modules'),
+    path.join(home, 'Library', 'pnpm'),
+    path.join(home, '.config', 'yarn', 'global', 'node_modules'),
+    path.join(home, '.yarn'),
+    path.join(home, 'scoop', 'apps'),
+    path.join('C:', 'ProgramData', 'chocolatey', 'lib'),
+  ]
+  // Add the npm global node_modules path wherever npm thinks it is
+  try {
+    const g = require('child_process').execSync('npm root -g', { encoding: 'utf8', timeout: 10000 }).trim()
+    if (g) roots.push(g)
+  } catch (_) { /* ignore */ }
+
+  for (const base of roots) {
+    if (!base || !fs.existsSync(base)) continue
+    try {
+      add(piAiCandidate(base))
+      add(findInPnpmStore(base))
+      // DFS scan to find ALL nested copies, not just the first
+      collectScan(base, add, 0, 4)
+    } catch (_) { /* ignore */ }
+  }
+
+  // 2) locate via `where dsh` / `which dsh` — resolves the ACTUAL installed dsh
+  try {
+    const isWin = process.platform === 'win32'
+    const outs = require('child_process').execSync(isWin ? 'where dsh' : 'which dsh', { encoding: 'utf8', timeout: 5000 })
+    const dshPaths = outs.split(/\r?\n/).filter(s => s.trim())
+    for (const dshPath of dshPaths.slice(0, 3)) {
+      if (!dshPath) continue
+      // Resolve real path of the .cmd / shim
+      let real = dshPath
+      try { real = fs.realpathSync(dshPath) } catch (_) { /* keep original */ }
+      const dshDir = path.dirname(path.resolve(real))
+      // Walk up looking for node_modules/@deepseek-ai/... and nested dsh/node_modules
+      let walk = dshDir
+      for (let i = 0; i < 8; i++) {
+        const nm = path.join(walk, 'node_modules')
+        if (fs.existsSync(nm)) {
+          add(piAiCandidate(nm))
+          add(findInPnpmStore(nm))
+          // npm global nested layout: <nm>/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm-pi-ai
+          const dshPkg = path.join(nm, '@deepseek-ai', 'dsh')
+          if (fs.existsSync(dshPkg)) {
+            add(piAiCandidate(path.join(dshPkg, 'node_modules')))
+          }
+        }
+        const parent = path.dirname(walk)
+        if (parent === walk) break
+        walk = parent
+      }
+      // Also the dsh package's own nested node_modules (npm nested deps)
+      add(piAiCandidate(path.join(dshDir, 'node_modules')))
+    }
+  } catch (_) { /* ignore */ }
+
+  // 3) pnpm root -g
+  try {
+    const pr = require('child_process').execSync('pnpm root -g', { encoding: 'utf8', timeout: 10000 }).trim()
+    if (pr) { add(piAiCandidate(pr)); add(findInPnpmStore(pr)) }
+  } catch (_) { /* ignore */ }
+
+  // 4) require.resolve fallback
+  try {
+    const r = require.resolve('@deepseek-ai/dsh-llm-pi-ai/lib/index')
+    if (r) add(r)
+  } catch (_) { /* ignore */ }
+
+  return Array.from(found.keys())
+}
+
+// Heuristic: locate Electron/desktop app runtimes on the system
+// (e.g. D:\deepseek harness\resources\runtime\node_modules)
+function desktopRuntimeRoots() {
+  const roots = []
+  const home = os.homedir()
+  const candidates = []
+  // Common desktop app install dirs
+  for (const d of ['D:', 'C:', 'E:', 'F:']) {
+    if (fs.existsSync(d + path.sep)) candidates.push(d + path.sep)
+  }
+  for (const base of candidates) {
+    try {
+      const top = fs.readdirSync(base, { withFileTypes: true })
+      for (const e of top) {
+        if (!e.isDirectory()) continue
+        const rt = path.join(base, e.name, 'resources', 'runtime', 'node_modules')
+        if (fs.existsSync(rt)) roots.push(rt)
+        else if (fs.existsSync(path.join(base, e.name, 'resources', 'app', 'node_modules'))) {
+          roots.push(path.join(base, e.name, 'resources', 'app', 'node_modules'))
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return roots
+}
+
+// Collect every matching index.js under `root` into `add` (no early return)
+function collectScan(root, add, depth, maxDepth) {
+  if (depth > maxDepth) return
   try {
     const entries = fs.readdirSync(root, { withFileTypes: true })
     for (const e of entries) {
       if (!e.isDirectory()) continue
       const p = path.join(root, e.name)
-      // pnpm virtual store inside a node_modules
       if (e.name === 'node_modules') {
-        const direct = piAiCandidate(p)
-        if (fs.existsSync(direct)) return direct
-        const pnpm = findInPnpmStore(p)
-        if (pnpm) return pnpm
-        const found = scanForPiAi(p, depth + 1, maxDepth + 1)
-        if (found) return found
+        add(piAiCandidate(p))
+        add(findInPnpmStore(p))
+        collectScan(p, add, depth + 1, maxDepth + 1)
         continue
       }
-      // direct @deepseek-ai check inside every folder
-      const direct = piAiCandidate(p)
-      if (fs.existsSync(direct)) return direct
-      // descend
-      const found = scanForPiAi(p, depth + 1, maxDepth)
-      if (found) return found
+      add(piAiCandidate(p))
+      collectScan(p, add, depth + 1, maxDepth)
     }
   } catch (_) { /* ignore */ }
-  return null
 }
 
 // Recursive search for the pi-ai package by directory name.
@@ -262,157 +394,8 @@ function findPiAiViaPnpmShim(home) {
 }
 
 function findPiAiIndex(cwd) {
-  // 1) search up the directory tree from cwd (project-local installs)
-  //    also covers pnpm project stores (node_modules/.pnpm) and npm flat stores
-  let dir = path.resolve(cwd)
-  for (;;) {
-    const c = path.join(dir, 'node_modules', PI_AI_REL)
-    if (fs.existsSync(c)) return c
-    // pnpm project virtual store
-    const pnpmStore = findInPnpmStore(dir)
-    if (pnpmStore) return pnpmStore
-    const p = path.dirname(dir)
-    if (p === dir) break
-    dir = p
-  }
-
-  // 2) known global / cache roots across platforms
-  const home = os.homedir()
-  const roots = [
-    // Windows npm/npx
-    path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
-    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
-    // Windows pnpm
-    path.join(home, 'AppData', 'Local', 'pnpm'),
-    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
-    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
-    path.join(home, 'AppData', 'Local', 'pnpm', 'global', '5', 'node_modules'),
-    path.join(home, 'AppData', 'Roaming', 'pnpm'),
-    // macOS / Linux npm
-    path.join(home, '.npm', '_npx'),
-    path.join(home, '.npm', 'node_modules'),
-    path.join('/usr', 'local', 'lib', 'node_modules'),
-    // macOS / Linux pnpm
-    path.join('/usr', 'local', 'share', 'pnpm'),
-    path.join(home, '.local', 'share', 'pnpm'),
-    path.join(home, '.local', 'share', 'pnpm', 'global'),
-    path.join(home, '.local', 'share', 'pnpm', 'global', '5', 'node_modules'),
-    path.join(home, '.pnpm-store'),
-    path.join(home, '.pnpm'),
-    // macOS / Linux npm (homebrew / system)
-    path.join('/opt', 'homebrew', 'lib', 'node_modules'),
-    // pnpm mac
-    path.join(home, 'Library', 'pnpm'),
-    // yarn
-    path.join(home, '.config', 'yarn', 'global', 'node_modules'),
-    path.join(home, '.yarn'),
-    // scoop / chocolatey
-    path.join(home, 'scoop', 'apps'),
-    path.join('C:', 'ProgramData', 'chocolatey', 'lib'),
-  ]
-
-  for (const base of roots) {
-    if (!fs.existsSync(base)) continue
-    try {
-      // direct hit: <base>/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
-      const direct = piAiCandidate(base)
-      if (fs.existsSync(direct)) return direct
-      // pnpm virtual store at this root
-      const pnpm = findInPnpmStore(base)
-      if (pnpm) return pnpm
-      // DFS deep scan: npx hash dirs, pnpm store dirs, scoop apps, etc.
-      const found = scanForPiAi(base, 0, 4)
-      if (found) return found
-    } catch (_) { /* ignore */ }
-  }
-
-  // 3) try resolving via npm / node itself
-  try {
-    const globalRoot = require('child_process').execSync('npm root -g', { encoding: 'utf8', timeout: 15000 }).trim()
-    if (globalRoot) {
-      const c = piAiCandidate(globalRoot)
-      if (fs.existsSync(c)) return c
-      const pnpm = findInPnpmStore(globalRoot)
-      if (pnpm) return pnpm
-    }
-  } catch (_) { /* ignore */ }
-
-  // 4) pnpm root -g (global install location)
-  try {
-    const pnpmRoot = require('child_process').execSync('pnpm root -g', { encoding: 'utf8', timeout: 15000 }).trim()
-    if (pnpmRoot) {
-      const c = piAiCandidate(pnpmRoot)
-      if (fs.existsSync(c)) return c
-      const pnpm = findInPnpmStore(pnpmRoot)
-      if (pnpm) return pnpm
-    }
-  } catch (_) { /* ignore */ }
-
-  // 5) locate via `where dsh` / `which dsh` command
-  //    Covers ANY installation method where dsh is on PATH
-  //    (npm global, pnpm global, yarn, etc.)
-  try {
-    const isWin = process.platform === 'win32'
-    const dshPath = require('child_process').execSync(isWin ? 'where dsh' : 'which dsh', { encoding: 'utf8', timeout: 5000 }).trim().split(/\r?\n/)[0]
-    if (dshPath) {
-      // Walk up from the dsh command directory looking for node_modules/@deepseek-ai/dsh-llm-pi-ai
-      // dshPath examples:
-      //   npm global:  C:\Users\<user>\AppData\Roaming\npm\dsh.cmd
-      //   npx:         C:\Users\<user>\AppData\Local\npm-cache\_npx\<hash>\node_modules\.bin\dsh
-      const dshDir = path.dirname(path.resolve(dshPath))
-      let walk = dshDir
-      for (let i = 0; i < 6; i++) {
-        const nm = path.join(walk, 'node_modules')
-        if (fs.existsSync(nm)) {
-          const c = piAiCandidate(nm)
-          if (fs.existsSync(c)) return c
-          const pnpm = findInPnpmStore(nm)
-          if (pnpm) return pnpm
-        }
-        const parent = path.dirname(walk)
-        if (parent === walk) break
-        walk = parent
-      }
-    }
-  } catch (_) { /* ignore */ }
-
-  // 6) try npm config get cache to find the npm/npx cache directory
-  try {
-    const cachePath = require('child_process').execSync('npm config get cache', { encoding: 'utf8', timeout: 10000 }).trim()
-    if (cachePath) {
-      const npxDir = path.join(cachePath, '_npx')
-      if (fs.existsSync(npxDir)) {
-        const found = scanForPiAi(npxDir, 0, 4)
-        if (found) return found
-      }
-    }
-  } catch (_) { /* ignore */ }
-
-  // 7) deep recursive search by package directory name
-  //    Covers pnpm virtual stores, deeply nested npx caches, and any other layout.
-  //    Searches for the directory named "dsh-llm-pi-ai" itself, unlimited depth.
-  for (const base of [
-    path.join(home, 'AppData', 'Local', 'pnpm', 'global'),
-    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
-    path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
-    path.join(home, '.npm', '_npx'),
-    path.join(home, '.local', 'share', 'pnpm', 'global'),
-    path.join('/usr', 'local', 'share', 'pnpm', 'global'),
-  ]) {
-    if (!fs.existsSync(base)) continue
-    try {
-      const found = findPiAiByPackageName(base)
-      if (found) return found
-    } catch (_) { /* ignore */ }
-  }
-
-  // 8) pnpm bin shim parser
-  try {
-    const found = findPiAiViaPnpmShim(home)
-    if (found) return found
-  } catch (_) { /* ignore */ }
-
-  return null
+  const all = findAllPiAiLocations(cwd)
+  return all.length > 0 ? all[0] : null
 }
 
 // ===========================================================================
@@ -744,9 +727,9 @@ function main() {
 
   if (args.version) { log(`${PKG} v${VERSION}`); process.exit(0) }
 
-  // --- Step 1: pi-ai patch ---
-  let piAiIndex = args.piAi || findPiAiIndex(cwd)
-  if (!piAiIndex) {
+  // --- Step 1: pi-ai patch (all found locations) ---
+  let piAiLocations = args.piAi ? [args.piAi] : findAllPiAiLocations(cwd)
+  if (piAiLocations.length === 0) {
     warn('@deepseek-ai/dsh-llm-pi-ai not found.')
     warn('')
     warn('This tool patches the pi-ai adapter bundled with DSH (DeepSeek Harness).')
@@ -762,13 +745,16 @@ function main() {
     warn('    (inside your DSH installation or the npx cache under ~/AppData/Local/npm-cache/_npx)')
     process.exit(1)
   }
-  log(`[1/2] pi-ai adapter: ${piAiIndex}`)
-  try {
-    const r = applyPiAiPatch(piAiIndex, args.dryRun)
-    if (r.status === 'already') log('  ✓ patch already applied, skipping')
-    else if (r.status === 'would-patch') log('  ✓ would patch (dry-run)')
-    else log('  ✓ patched (backup: ' + r.backup + ')')
-  } catch (e) { die(e.message) }
+  let patchedAny = false, alreadyAll = true
+  log(`[1/${piAiLocations.length + 1}] pi-ai adapter (${piAiLocations.length} installs found)`)
+  for (const loc of piAiLocations) {
+    try {
+      const r = applyPiAiPatch(loc, args.dryRun)
+      if (r.status === 'already') { log(`  ✓ ${loc}\n    (already patched, skipping)`) }
+      else if (r.status === 'would-patch') { log(`  ✓ would patch ${loc}\n    (dry-run)`); patchedAny = true }
+      else { log(`  ✓ patched ${loc}\n    (backup: ${r.backup})`); patchedAny = true; alreadyAll = false }
+    } catch (e) { warn(`  ✗ ${loc}: ${e.message}`) }
+  }
 
   // --- List mode ---
   if (args.list) {
@@ -823,11 +809,12 @@ function main() {
       log('  ' + (statusMap[r.status] || r.status))
     } catch (e) { die(e.message) }
 
-    // Verify
+    // Verify (any location patched)
     if (!args.dryRun) {
       const finalSettings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : ''
-      const piAiSrc = fs.readFileSync(piAiIndex, 'utf8')
-      const okPatch = piAiSrc.includes(PATCH_MARKER)
+      const okPatch = patchedAny || piAiLocations.every(loc => {
+        try { return fs.readFileSync(loc, 'utf8').includes(PATCH_MARKER) } catch (_) { return false }
+      })
       const okSettings = /reasoningEfforts\s*:/.test(finalSettings)
       if (okPatch && okSettings) log('\nDone. Restart DSH to use.')
       else {
