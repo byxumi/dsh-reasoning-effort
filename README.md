@@ -43,8 +43,16 @@ Agent 应当返回检查结果和安装状态。如果已经安装，它会告�
 ```text
 请帮我从 DeepSeek Harness 完全卸载推理强度插件。
 
-只执行下面一条命令即可（会清理 pi-ai 补丁、settings.yaml 推理声明和 Profile 配置，一步到位）：
-node uninstall.js --all
+按下面步骤执行：
+1. 在本机找到或下载卸载脚本 uninstall.js：
+   - 如果当前目录或 ~/.dsh/ 下已有 uninstall.js，跳过下载。
+   - 否则先用 curl 下载：
+     curl -fsSL -o uninstall.js https://raw.githubusercontent.com/byxumi/dsh-reasoning-effort/main/uninstall.js
+   - 如果 curl 不可用（Windows 旧系统），改用 PowerShell：
+     Invoke-WebRequest -Uri https://raw.githubusercontent.com/byxumi/dsh-reasoning-effort/main/uninstall.js -OutFile uninstall.js
+2. 运行（会清理 pi-ai 补丁、settings.yaml 推理声明和 Profile 配置，一步到位）：
+   node uninstall.js --all
+3. 如果 node 也不可用，直接告诉我"缺少 Node.js 环境"，不要硬装。
 
 运行后告诉我结果，并提醒我手动重启 DSH Web Host。
 ```
