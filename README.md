@@ -25,10 +25,7 @@ dsh --profile web --dump-config
 
 输出中应出现 `dsh-reasoning-effort` 的条目，说明插件已挂载成功。
 
-> 若网络环境支持直连 GitHub，也可用 `github:byxumi/dsh-reasoning-effort#main` 语法：
-> ```bash
-> dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
-> ```
+> 若网络环境支持直连 GitHub，也可用 `github:byxumi/dsh-reasoning-effort#main` 语法：`dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main`
 > 如果 pnpm 提示构建脚本需批准，编辑 `pnpm-workspace.yaml` 的 `allowBuilds` 添加对应 key 后重试。
 
 **安装完成后，手动重启 DSH Web Host 使插件生效。**
@@ -48,12 +45,9 @@ dsh --profile web --dump-config
 
 安装后，你可以在新会话中直接问 Agent：*"你能控制推理强度吗？"*，Agent 会回答它知道这个功能并指导你使用。
 
-#### 给 AI 的安装提示词模板
+#### 给 AI 的安装提示词
 
-让 AI（DeepSeek / Claude / 其他模型）帮你安装时，把下面这段原样发给它：
-
-<details>
-<summary>📋 点击复制——Agent 安装提示词</summary>
+让 AI（DeepSeek / Claude / 其他模型）帮你安装时，把下面这段**原样复制**发给它：
 
 ```text
 请为 DeepSeek Harness 的 web Profile 安装 dsh-reasoning-effort 推理强度插件。
@@ -86,14 +80,9 @@ dsh --profile web --dump-config
 - 安装完成后，提醒我手动重启 DSH Web Host 使插件生效，并汇报安装结果。
 ```
 
-</details>
+#### 给 AI 的卸载提示词
 
-#### 给 AI 的卸载提示词模板
-
-需要卸载时，把下面这段原样发给 AI：
-
-<details>
-<summary>📋 点击复制——Agent 卸载提示词</summary>
+需要卸载时，把下面这段**原样复制**发给 AI：
 
 ```text
 请为 DeepSeek Harness 的 web Profile 卸载 dsh-reasoning-effort 推理强度插件。
@@ -122,8 +111,6 @@ dsh --profile web --dump-config
 - 不要修改除 web 以外的其他 Profile。
 - 卸载完成后，提醒我手动重启 DSH Web Host 使卸载生效，并汇报卸载结果。
 ```
-
-</details>
 
 ### 安装方式二：codeload 源码包（网络受限时）
 
