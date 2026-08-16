@@ -31,7 +31,7 @@ const os = require('os')
 // ===========================================================================
 
 const PKG = 'dsh-win-reasoning'
-const 1.1.7
+const VERSION = '1.1.7'
 const BACKUP_SUFFIX = '.dsh-reasoning.bak'
 const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
 
@@ -205,80 +205,58 @@ function restorePiAiPatch(indexPath, dryRun) {
     fs.unlinkSync(bakPath)
     return { status: 'restored', path: indexPath, backup: bakPath }
   }
-  // No backup file — try reverse patch (revert the compat forwarding changes)
+  // No backup file — reverse patch (revert the compat forwarding changes)
   try {
     const src = fs.readFileSync(indexPath, 'utf8')
-    if (!src.includes(PATCH_MARKER)) {
-      return { status: 'no-backup-unpatched', path: indexPath }
-    }
+    // Check if the file is actually patched
+    const isPatched = src.includes('supportsDeveloperRole') || src.includes('supportsStore') || src.includes('maxTokensField')
+    if (!isPatched) return { status: 'no-backup-unpatched', path: indexPath }
     if (dryRun) return { status: 'would-reverse', path: indexPath }
-    // Line-based reverse patch — more robust than exact string matching
+
+    // Line-based reverse patch:
+    //  1. Remove the 3 head variable declarations
+    //  2. Restore the if condition
+    //  3. Remove the 3 return spread lines
     const lines = src.split('\n')
-    const newLines = []
+    const out = []
     let removed = 0
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      const trimmed = line.trim()
-      // Skip the 3 extra variable declarations from the head section
-      if (trimmed.startsWith('const supportsDeveloperRole =') ||
-          trimmed.startsWith('const supportsStore =') ||
-          trimmed.startsWith('const maxTokensField =')) {
+    let inCompat = false
+    for (const line of lines) {
+      const t = line.trim()
+
+      // 1. head declarations
+      if (t.startsWith('const supportsDeveloperRole =') ||
+          t.startsWith('const supportsStore =') ||
+          t.startsWith('const maxTokensField =')) {
         removed++
         continue
       }
-      // Replace the extra if condition with the original one
-      if (trimmed === 'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};') {
-        newLines.push(line.replace(
+      // 2. if condition: restore original
+      if (t === 'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};') {
+        out.push(line.replace(
           'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};',
           'if (thinkingFormat === void 0 && supportsReasoningEffort === void 0) return {};'
         ))
         removed++
         continue
       }
-      // Detect the return block of resolveModelCompat
-      if (trimmed === 'return { compat: {' && !inCompatReturn) {
-        inCompatReturn = true
-        newLines.push(line)
-        continue
-      }
-      if (inCompatReturn) {
-        if (trimmed.includes('supportsDeveloperRole') || trimmed.includes('supportsStore') || trimmed.includes('maxTokensField')) {
+      // 3. return block spreads
+      if (t === 'return { compat: {') { inCompat = true; out.push(line); continue }
+      if (inCompat) {
+        if (t.includes('supportsDeveloperRole') || t.includes('supportsStore') || t.includes('maxTokensField')) {
           removed++
-          continue // skip these 3 lines
-        }
-        if (trimmed === '};' || trimmed === '}' || trimmed === '} };' || trimmed === '};') {
-          inCompatReturn = false
-          newLines.push(line)
           continue
         }
-        newLines.push(line)
+        if (t === '} };' || t === '};' || t === '}' || t === '}') { inCompat = false }
+        out.push(line)
         continue
       }
-      // Detect and fix the if condition
-      if (trimmed.startsWith('if (thinkingFormat === void 0 && supportsReasoningEffort === void 0')) {
-        headCheckLine = i
-        newLines.push(line)
-        continue
-      }
-      if (headCheckLine >= 0 && i === headCheckLine + 1 && trimmed.includes('supportsDeveloperRole')) {
-        // This is the extra condition line, skip it
-        removed++
-        headCheckLine = -1
-        continue
-      }
-      if (headCheckLine >= 0) {
-        headCheckLine = -1
-        newLines.push(line)
-        continue
-      }
-      newLines.push(line)
+      out.push(line)
     }
-    if (removed === 0) {
-      return { status: 'no-backup-reverse-failed', path: indexPath }
-    }
-    // Safety backup
+    if (removed === 0) return { status: 'no-backup-reverse-failed', path: indexPath }
+
     fs.writeFileSync(indexPath + '.dsh-uninstall-safety.bak', src, 'utf8')
-    fs.writeFileSync(indexPath, newLines.join('\n'), 'utf8')
+    fs.writeFileSync(indexPath, out.join('\n'), 'utf8')
     return { status: 'reverse-restored', path: indexPath, removed }
   } catch (e) {
     return { status: 'no-backup-reverse-error', path: indexPath, error: e.message }
