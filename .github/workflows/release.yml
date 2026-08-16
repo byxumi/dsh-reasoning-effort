@@ -33,9 +33,9 @@ jobs:
       - name: Create release package
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          PKG="dsh-win-reasoning-${TAG}.zip"
+          PKG="dsh-reasoning-effort-${TAG}.zip"
           mkdir -p dist
-          cp install.js install.bat uninstall.js uninstall.bat README.md LICENSE package.json dist/
+          cp -r lib patch.yml install.js install.bat uninstall.js uninstall.bat README.md LICENSE package.json dist/
           cd dist
           zip -r "../${PKG}" ./*
           cd ..
@@ -52,13 +52,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: dsh-win-reasoning ${{ steps.version.outputs.tag }}
+          name: dsh-reasoning-effort ${{ steps.version.outputs.tag }}
           body: |
-            ## dsh-win-reasoning ${{ steps.version.outputs.tag }}
+            ## dsh-reasoning-effort ${{ steps.version.outputs.tag }}
 
-            DSH reasoning effort installer — enables reasoning effort selection in the official DSH model selector.
+            DSH reasoning effort plugin — enables reasoning effort selection in the official DSH model selector.
 
             ### 📦 Contains
+            - `lib/index.js` — cordis plugin entry
+            - `patch.yml` — profile bundle declaration
             - `install.js` — cross-platform installer script
             - `install.bat` — Windows double-click launcher
             - `uninstall.js` — uninstall script
@@ -67,7 +69,12 @@ jobs:
             - `LICENSE` — MIT license
             - `package.json` — npm package descriptor
 
-            ### 🚀 Quick Start
+            ### 🚀 Install as DSH plugin
+            ```bash
+            dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
+            ```
+
+            ### 🚀 Quick Start (manual)
             ```bash
             # Windows: double-click install.bat, or:
             node install.js --off

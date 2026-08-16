@@ -1,10 +1,13 @@
 {
-  "name": "dsh-win-reasoning",
+  "name": "dsh-reasoning-effort",
   "version": "1.2.1",
-  "description": "One-click installer that enables reasoning effort selection in the official DSH model selector. Patches pi-ai compat forwarding and writes model capability declarations. Works with any provider and any model on Windows, macOS, Linux.",
+  "description": "DSH reasoning effort plugin — enables reasoning effort selection in the official model selector. Installable via `dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main`",
   "private": true,
-  "bin": {
-    "install-reasoning-effort": "install.js"
+  "main": "lib/index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./patch.yml"
+    }
   },
   "scripts": {
     "install": "node install.js --off",
@@ -13,6 +16,8 @@
     "uninstall": "node uninstall.js"
   },
   "files": [
+    "lib/index.js",
+    "patch.yml",
     "install.js",
     "install.bat",
     "uninstall.js",
