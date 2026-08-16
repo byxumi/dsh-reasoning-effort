@@ -62,6 +62,15 @@ node install.js --dry-run --provider my-gw --models m1,m2  # 预览改动
 node install.js --provider my-gw --models m1,m2            # 正式安装
 ```
 
+#### pnpm 安装 DSH 的用户
+
+脚本已适配 pnpm 的目录结构，自动识别：
+
+- **项目内安装**：`<项目>/node_modules/.pnpm/@deepseek-ai+dsh-llm-pi-ai@*/...`
+- **全局安装**：`<pnpm-home>/global/5/node_modules/.pnpm/@deepseek-ai+dsh-llm-pi-ai@*/...`
+
+无需额外参数，直接运行 `node install.js` 或 `install.bat` 即可。
+
 ---
 
 ### 脚本做了什么
@@ -199,6 +208,15 @@ node install.js --provider my-gateway --models m1,m2  # write model declarations
 node install.js --list                             # inspect current config
 node install.js --dry-run --provider my-gw --models m1,m2
 ```
+
+#### pnpm users
+
+The script auto-detects pnpm's directory layout:
+
+- **Project install**: `<project>/node_modules/.pnpm/@deepseek-ai+dsh-llm-pi-ai@*/...`
+- **Global install**: `<pnpm-home>/global/5/node_modules/.pnpm/@deepseek-ai+dsh-llm-pi-ai@*/...`
+
+No extra arguments needed — just run `node install.js` or `install.bat`.
 
 ### What it does
 
