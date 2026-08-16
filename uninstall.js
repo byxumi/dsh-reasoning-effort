@@ -35,6 +35,23 @@ const VERSION = '1.1.3'
 const BACKUP_SUFFIX = '.dsh-reasoning.bak'
 const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
 
+// Reverse patch markers (identical to install.js for detecting the patch)
+const PATCH_MARKER = 'supportsDeveloperRole === void 0 ? {} : { supportsDeveloperRole }'
+const PATCHED_HEAD = 'const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat;\n' +
+  '\tconst supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort;\n' +
+  '\tconst supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole;\n' +
+  '\tconst supportsStore = entry.compat?.supportsStore ?? route?.supportsStore;\n' +
+  '\tconst maxTokensField = entry.compat?.maxTokensField ?? route?.maxTokensField;\n' +
+  '\tif (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};'
+const ORIGINAL_HEAD = 'const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat;\n' +
+  '\tconst supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort;\n' +
+  '\tif (thinkingFormat === void 0 && supportsReasoningEffort === void 0) return {};'
+const PATCHED_FN_TAIL = 'supportsReasoningEffort === void 0 ? {} : { supportsReasoningEffort },\n' +
+  '\t\t...supportsDeveloperRole === void 0 ? {} : { supportsDeveloperRole },\n' +
+  '\t\t...supportsStore === void 0 ? {} : { supportsStore },\n' +
+  '\t\t...maxTokensField === void 0 ? {} : { maxTokensField }\n\t}; };'
+const ORIGINAL_FN_TAIL = 'supportsReasoningEffort === void 0 ? {} : { supportsReasoningEffort }\n\t}; };'
+
 // ===========================================================================
 //  CLI
 // ===========================================================================
@@ -182,15 +199,77 @@ function findPiAiIndex(cwd) {
 
 function restorePiAiPatch(indexPath, dryRun) {
   const bakPath = indexPath + BACKUP_SUFFIX
-  if (!fs.existsSync(bakPath)) {
-    return { status: 'no-backup', path: indexPath }
+  if (fs.existsSync(bakPath)) {
+    if (dryRun) return { status: 'would-restore', path: indexPath, backup: bakPath }
+    fs.writeFileSync(indexPath, fs.readFileSync(bakPath, 'utf8'), 'utf8')
+    fs.unlinkSync(bakPath)
+    return { status: 'restored', path: indexPath, backup: bakPath }
   }
-  if (dryRun) {
-    return { status: 'would-restore', path: indexPath, backup: bakPath }
+  // No backup file — try reverse patch (revert the compat forwarding changes)
+  try {
+    const src = fs.readFileSync(indexPath, 'utf8')
+    if (!src.includes(PATCH_MARKER)) {
+      return { status: 'no-backup-unpatched', path: indexPath }
+    }
+    if (dryRun) return { status: 'would-reverse', path: indexPath }
+    // Line-based reverse patch — more robust than exact string matching
+    const lines = src.split('\n')
+    const newLines = []
+    let inCompatReturn = false
+    let inHeadCheck = false
+    let headCheckLine = -1
+    let removed = 0
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const trimmed = line.trim()
+      // Detect the return block of resolveModelCompat
+      if (trimmed === 'return { compat: {' && !inCompatReturn) {
+        inCompatReturn = true
+        newLines.push(line)
+        continue
+      }
+      if (inCompatReturn) {
+        if (trimmed.includes('supportsDeveloperRole') || trimmed.includes('supportsStore') || trimmed.includes('maxTokensField')) {
+          removed++
+          continue // skip these 3 lines
+        }
+        if (trimmed === '};' || trimmed === '}' || trimmed === '} };' || trimmed === '};') {
+          inCompatReturn = false
+          newLines.push(line)
+          continue
+        }
+        newLines.push(line)
+        continue
+      }
+      // Detect and fix the if condition
+      if (trimmed.startsWith('if (thinkingFormat === void 0 && supportsReasoningEffort === void 0')) {
+        headCheckLine = i
+        newLines.push(line)
+        continue
+      }
+      if (headCheckLine >= 0 && i === headCheckLine + 1 && trimmed.includes('supportsDeveloperRole')) {
+        // This is the extra condition line, skip it
+        removed++
+        headCheckLine = -1
+        continue
+      }
+      if (headCheckLine >= 0) {
+        headCheckLine = -1
+        newLines.push(line)
+        continue
+      }
+      newLines.push(line)
+    }
+    if (removed === 0) {
+      return { status: 'no-backup-reverse-failed', path: indexPath }
+    }
+    // Safety backup
+    fs.writeFileSync(indexPath + '.dsh-uninstall-safety.bak', src, 'utf8')
+    fs.writeFileSync(indexPath, newLines.join('\n'), 'utf8')
+    return { status: 'reverse-restored', path: indexPath, removed }
+  } catch (e) {
+    return { status: 'no-backup-reverse-error', path: indexPath, error: e.message }
   }
-  fs.writeFileSync(indexPath, fs.readFileSync(bakPath, 'utf8'), 'utf8')
-  fs.unlinkSync(bakPath)
-  return { status: 'restored', path: indexPath, backup: bakPath }
 }
 
 // ===========================================================================
@@ -349,14 +428,17 @@ function main() {
   let piAiIndex = args.piAi || findPiAiIndex(cwd)
   if (piAiIndex) {
     const r = restorePiAiPatch(piAiIndex, args.dryRun)
-    if (r.status === 'no-backup') {
-      console.log('[1/2] pi-ai adapter: no backup found at ' + piAiIndex + BACKUP_SUFFIX)
-      console.log('  (patch not restored — either already restored or never patched)')
-    } else if (r.status === 'would-restore') {
-      console.log('  🗑 would restore backup (dry-run)')
-    } else {
-      console.log('  🗑 pi-ai patch restored from backup')
+    const msgs = {
+      'restored': '  🗑 pi-ai patch restored from backup',
+      'would-restore': '  🗑 would restore backup (dry-run)',
+      'no-backup-unpatched': '  (no patch found — already reverted)',
+      'no-backup-reverse-failed': '  ⚠ patch found but reverse patch failed (no backup available)',
+      'no-backup-reverse-error': '  ⚠ reverse patch error: ' + (r.error || ''),
+      'reverse-restored': '  🗑 pi-ai patch reverted (no backup was available, applied reverse patch)',
+      'would-reverse': '  🗑 would revert patch (dry-run, no backup)',
     }
+    console.log('[1/2] pi-ai adapter: ' + piAiIndex)
+    console.log(msgs[r.status] || '  ' + r.status)
   } else {
     console.log('[1/2] pi-ai adapter: not found. Skipping.')
   }
