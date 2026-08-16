@@ -48,12 +48,9 @@ After the plugin is installed and DSH restarts, the Agent automatically gains th
 
 After installation, you can ask the Agent in a new session: *"Can you control reasoning effort?"* — it will confirm it knows the feature and guide you.
 
-#### Prompt template for AI (install)
+#### Prompt for AI (install)
 
-Copy and paste the following verbatim to let an AI (DeepSeek / Claude / any model) install it for you:
-
-<details>
-<summary>📋 Click to copy — Agent install prompt</summary>
+Copy the following **verbatim** and send it to an AI (DeepSeek / Claude / any model) to install:
 
 ```text
 Please install the dsh-reasoning-effort reasoning-effort plugin for the DeepSeek Harness "web" Profile.
@@ -87,14 +84,9 @@ Run `dsh --profile web --dump-config` and confirm the output contains:
 - After finishing, remind me to manually restart the DSH Web Host and report the result.
 ```
 
-</details>
+#### Prompt for AI (uninstall)
 
-#### Prompt template for AI (uninstall)
-
-Copy and paste the following verbatim to let an AI uninstall it for you:
-
-<details>
-<summary>📋 Click to copy — Agent uninstall prompt</summary>
+Copy the following **verbatim** and send it to an AI to uninstall:
 
 ```text
 Please uninstall the dsh-reasoning-effort reasoning-effort plugin from the DeepSeek Harness "web" Profile.
@@ -123,8 +115,6 @@ Run `dsh --profile web --dump-config` and confirm dsh-reasoning-effort no longer
 - Do NOT modify any Profile other than "web".
 - After finishing, remind me to manually restart the DSH Web Host and report the result.
 ```
-
-</details>
 
 ### Method 2: codeload tarball (for restricted networks)
 
