@@ -45,7 +45,7 @@ const ORIGINAL_HEAD = 'const thinkingFormat = entry.compat?.thinkingFormat ?? ro
 
 const PATCHED_HEAD = 'const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat;\n' +
   '\tconst supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort;\n' +
-  '\tconst supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole;\n' +
+  '\tconst supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole ?? false;\n' +
   '\tconst supportsStore = entry.compat?.supportsStore ?? route?.supportsStore;\n' +
   '\tconst maxTokensField = entry.compat?.maxTokensField ?? route?.maxTokensField;\n' +
   '\tif (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0 && supportsStore === void 0 && maxTokensField === void 0) return {};'
@@ -431,7 +431,7 @@ function applyPiAiPatch(indexPath, dryRun) {
       const indent = line.match(/^\s*/)[0]
       const nextLine = (lines[i + 1] || '').trim()
       if (!nextLine.startsWith('const supportsDeveloperRole =')) {
-        headLines.push(indent + 'const supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole;')
+        headLines.push(indent + 'const supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole ?? false;')
         headLines.push(indent + 'const supportsStore = entry.compat?.supportsStore ?? route?.supportsStore;')
         headLines.push(indent + 'const maxTokensField = entry.compat?.maxTokensField ?? route?.maxTokensField;')
       }
