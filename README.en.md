@@ -23,7 +23,7 @@ dsh --profile web --dump-config
 
 If dsh-reasoning-effort already appears in the output, just tell me "already installed" and stop.
 If not, install it (only modify the web Profile, leave others alone):
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 
 After installation, verify again:
 dsh --profile web --dump-config
@@ -60,7 +60,7 @@ Do NOT shut down or restart the DSH process; remind me to manually restart the D
 You can also run the commands yourself:
 
 ```bash
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 dsh --profile web --dump-config
 ```
 
