@@ -597,7 +597,30 @@ function main() {
     else if (r.status === 'would-clean') console.log('  🗑 would remove declarations (dry-run)')
     else console.log('  🗑 declarations removed for ' + args.provider + '/' + models.join(','))
   } else {
-    console.log('  No --provider/--models or --all given. Use uninstall.sh --help for options.')
+    // Default: auto-detect and clean
+    const s = fs.readFileSync(settingsPath, 'utf8')
+    if (s.includes('reasoningEfforts:') || s.includes('compat:') && s.includes('supportsReasoningEffort: true')) {
+      const r = cleanSettings(settingsPath, null, null, true, args.dryRun)
+      if (r.status === 'cleaned' || r.status === 'would-clean') {
+        console.log('  🗑 reasoning effort declarations removed from settings.yaml')
+      } else {
+        console.log('  (no declarations found in settings.yaml)')
+      }
+    } else {
+      console.log('  (no reasoning effort declarations found in settings.yaml)')
+    }
+    // Try to remove from profile
+    try {
+      const profileDir = path.join(os.homedir(), '.dsh', 'profiles', 'web')
+      const pkgPath = path.join(profileDir, 'package.json')
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+        if (pkg.dsh?.profile?.bundles?.includes('dsh-reasoning-effort')) {
+          console.log('  ℹ plugin still registered in web Profile. Run:')
+          console.log('    dsh plugin --profile web remove dsh-reasoning-effort')
+        }
+      }
+    } catch (_) { /* ignore */ }
   }
 
   console.log('\nDone. Restart DSH to take effect.')
