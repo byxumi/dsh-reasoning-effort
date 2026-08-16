@@ -8,26 +8,29 @@
 
 ## 中文文档
 
-### 安装方式一：DSH 插件（推荐）
+### 安装方式一：Agent 一键安装（推荐）
 
-从 GitHub 安装为 DSH profile 插件：
-
-```bash
-dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
-```
-
-> 若 pnpm 提示 git 钩子需允许（`allowBuilds`），按提示在
-> `~/.dsh/profiles/web/pnpm-workspace.yaml` 中添加对应 key 后重试。
-
-验证是否已作为 profile layer 挂载：
+通过 DSH 内置的 `dsh plugin` 代理命令，将插件挂载到 web Profile：
 
 ```bash
+# 安装 dsh-reasoning-effort 插件到 web Profile
+dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
+
+# 确认插件已注册为 profile layer
 dsh --profile web --dump-config
 ```
 
-安装后重启 DSH，模型选择器弹出菜单会出现 **Effort（推理等级）** 入口。
+输出中应出现 `dsh-reasoning-effort` 的条目，说明插件已挂载成功。
 
-### 网络限制的替代安装方式（推荐）
+> 若网络环境支持直连 GitHub，也可用 `github:byxumi/dsh-reasoning-effort#main` 语法：
+> ```bash
+> dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
+> ```
+> 如果 pnpm 提示构建脚本需批准，编辑 `pnpm-workspace.yaml` 的 `allowBuilds` 添加对应 key 后重试。
+
+**安装完成后，手动重启 DSH Web Host 使插件生效。**
+
+### 安装方式二：手动脚本安装
 
 若你的网络环境无法直连 GitHub（`github:byxumi/dsh-reasoning-effort#main` 安装失败），
 可以用 **codeload 源码包 URL** 安装（codeload.github.com 通常可访问）：
@@ -135,19 +138,27 @@ node uninstall.js --all
 
 A DSH plugin that enables **reasoning effort selection** in the official model selector. Works with any provider and any model.
 
-### Install as DSH plugin
+### Method 1: Agent one-click install (recommended)
+
+Use DSH's built-in `dsh plugin` proxy command to mount the plugin into the web Profile:
 
 ```bash
-dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
-```
+# Install dsh-reasoning-effort into the web Profile
+dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
 
-Verify it's mounted as a profile layer:
-
-```bash
+# Confirm the plugin is registered as a profile layer
 dsh --profile web --dump-config
 ```
 
-Restart DSH. The model selector dropdown shows an **Effort** entry with 6 levels (off/low/medium/high/xhigh/max).
+You should see a `dsh-reasoning-effort` entry in the output.
+
+> If your network can reach GitHub directly, the `github:` shorthand also works:
+> ```bash
+> dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
+> ```
+> If pnpm blocks build scripts, approve the package in `pnpm-workspace.yaml` under `allowBuilds`, then re-run.
+
+**After installation, manually restart the DSH Web Host for the plugin to take effect.**
 
 ### Alternative: codeload tarball (recommended for restricted networks)
 
