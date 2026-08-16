@@ -285,7 +285,7 @@ function parsePiAiSections(text) {
       sections.push(current); inModels = false; continue
     }
     if (current && ind === 6 && /^models\s*:/.test(trimmed)) { inModels = true; if (current.modelsStart < 0) current.modelsStart = i; continue }
-    if (current && inModels && /^- id:\s+(\S+)/.test(trimmed)) { current.models.push({ index: i, modelId: trimmed.match(/^- id:\s+(\S+)/)[1] }); continue }
+    if (current && inModels && ind >= 8 && /^- id:\s+(\S+)/.test(trimmed)) { current.models.push({ start: i, end: -1, modelId: trimmed.match(/^- id:\s+(\S+)/)[1] }); continue }
     if (ind === 0 && /^[A-Za-z0-9_-]+\s*\S*:/.test(trimmed) && !/^llm-pi-ai/.test(trimmed)) {
       if (current) finalizeSection(current, lines, i)
       inPiAi = false; inProviders = false; current = null; inModels = false; continue
@@ -295,26 +295,34 @@ function parsePiAiSections(text) {
   return sections
 }
 
+function finalizeModelEnds(sec) {
+  for (let i = 0; i < sec.models.length; i++) {
+    const m = sec.models[i]; const next = sec.models[i + 1]
+    m.end = next ? next.start - 1 : sec.modelsEnd
+  }
+}
+
 function finalizeSection(sec, lines, endIndex) {
   if (sec.models.length === 0) { sec.modelsEnd = sec.modelsStart >= 0 ? sec.modelsStart : -1; return }
-  const last = sec.models[sec.models.length - 1]; let end = last.index
-  for (let j = last.index + 1; j < lines.length && j < endIndex; j++) {
+  const last = sec.models[sec.models.length - 1]; let end = last.start
+  for (let j = last.start + 1; j < lines.length && j < endIndex; j++) {
     const ind = indentOf(lines[j]), trimmed = lines[j].trim()
     if (trimmed === '' || trimmed.startsWith('#')) continue
     if (ind <= 6) break
     end = j
   }
   sec.modelsEnd = end
+  finalizeModelEnds(sec)
 }
 
 // Remove compat and reasoningEfforts from a specific model block (by line range)
-function cleanModelBlock(text, modelLineIndex, modelsEnd) {
+function cleanModelBlock(text, lineStart, lineEnd) {
   const lines = text.split(/\r?\n/)
   const toRemove = []
   let inCompat = false, compatDepth = 0, compatStart = -1
   let inEfforts = false, effortsDepth = 0, effortsStart = -1
 
-  for (let j = modelLineIndex + 1; j <= modelsEnd; j++) {
+  for (let j = lineStart + 1; j <= lineEnd; j++) {
     const ind = indentOf(lines[j]), trimmed = lines[j].trim()
     if (trimmed === '' || trimmed.startsWith('#')) continue
     // compat block
@@ -322,7 +330,7 @@ function cleanModelBlock(text, modelLineIndex, modelsEnd) {
       inCompat = true; compatStart = j; compatDepth = ind; continue
     }
     if (inCompat && ind > compatDepth) continue
-    if (inCompat && ind === compatDepth && inCompat) {
+    if (inCompat && ind === compatDepth) {
       toRemove.push({ start: compatStart, end: j - 1 })
       inCompat = false
     }
@@ -331,14 +339,14 @@ function cleanModelBlock(text, modelLineIndex, modelsEnd) {
       inEfforts = true; effortsStart = j; effortsDepth = ind; continue
     }
     if (inEfforts && ind > effortsDepth) continue
-    if (inEfforts && ind === effortsDepth && inEfforts) {
+    if (inEfforts && ind === effortsDepth) {
       toRemove.push({ start: effortsStart, end: j - 1 })
       inEfforts = false
     }
   }
   // Close any open blocks at the end
-  if (inCompat) toRemove.push({ start: compatStart, end: modelsEnd })
-  if (inEfforts) toRemove.push({ start: effortsStart, end: modelsEnd })
+  if (inCompat) toRemove.push({ start: compatStart, end: lineEnd })
+  if (inEfforts) toRemove.push({ start: effortsStart, end: lineEnd })
 
   // Remove from end to preserve line numbers
   toRemove.sort((a, b) => b.start - a.start)
@@ -355,7 +363,7 @@ function modelHasDeclarations(text, provider, modelId) {
     if (sec.provider !== provider) continue
     for (const m of sec.models) {
       if (m.modelId !== modelId) continue
-      for (let j = m.index + 1; j <= sec.modelsEnd; j++) {
+      for (let j = m.start + 1; j <= m.end; j++) {
         const trimmed = lines[j].trim()
         if (/^compat\s*:/.test(trimmed) || /^reasoningEfforts\s*:/.test(trimmed)) return true
       }
@@ -371,29 +379,34 @@ function cleanSettings(settingsPath, provider, models, all, dryRun) {
   let needWrite = false
 
   if (all) {
-    // Remove ALL compat and reasoningEfforts blocks from ALL models under ALL providers
+    // Remove ALL compat and reasoningEfforts blocks from ALL models.
+    // Process models from bottom to top to avoid line-number shifting.
     const sections = parsePiAiSections(text)
+    const allModels = []
     for (const sec of sections) {
       for (const m of sec.models) {
-        if (!modelHasDeclarations(text, sec.provider, m.modelId)) continue
-        const newText = cleanModelBlock(text, m.index, sec.modelsEnd)
-        if (newText !== text) { text = newText; needWrite = true }
-        // Re-parse after each change
-        const newSecs = parsePiAiSections(text)
-        const ns = newSecs.find(s => s.provider === sec.provider)
-        if (ns) for (const nm of ns.models) { if (nm.modelId === m.modelId) { /* update index */ break } }
+        allModels.push({ provider: sec.provider, modelId: m.modelId, start: m.start, end: m.end })
       }
     }
-  } else if (provider && models) {
-    for (const m of models) {
-      if (!modelHasDeclarations(text, provider, m)) continue
-      const sections = parsePiAiSections(text)
-      const sec = sections.find(s => s.provider === provider)
-      if (!sec) continue
-      const model = sec.models.find(x => x.modelId === m)
-      if (!model) continue
-      const newText = cleanModelBlock(text, model.index, sec.modelsEnd)
+    // Sort by end descending (bottom to top)
+    allModels.sort((a, b) => b.end - a.end)
+    for (const m of allModels) {
+      if (!modelHasDeclarations(text, m.provider, m.modelId)) continue
+      const newText = cleanModelBlock(text, m.start, m.end)
       if (newText !== text) { text = newText; needWrite = true }
+    }
+  } else if (provider && models) {
+    // Process specified models from bottom to top
+    const sections = parsePiAiSections(text)
+    const sec = sections.find(s => s.provider === provider)
+    if (sec) {
+      const targets = models.map(id => sec.models.find(m => m.modelId === id)).filter(Boolean)
+      targets.sort((a, b) => b.end - a.end)
+      for (const m of targets) {
+        if (!modelHasDeclarations(text, provider, m.modelId)) continue
+        const newText = cleanModelBlock(text, m.start, m.end)
+        if (newText !== text) { text = newText; needWrite = true }
+      }
     }
   }
 

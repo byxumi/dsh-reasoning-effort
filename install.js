@@ -535,6 +535,27 @@ function modelBlock(id, name, indent) {
   return `${indent}- id: ${id}\n${indent}  name: ${name}\n${indent}  contextWindow: 1000000\n${indent}  maxTokens: 65536\n${indent}${c}\n${indent}${e}`
 }
 
+// Only the declaration sub-blocks (compat + reasoningEfforts), without the model header.
+// Used when adding declarations to an EXISTING model that already has its - id: line.
+// modelIndent is the indent of the `- id:` line (e.g. 8 spaces).
+// The `compat:` and `reasoningEfforts:` keys should be at modelIndent + 2.
+function declarationBlock(modelIndent) {
+  const outer = modelIndent + '  '  // e.g. 10 spaces
+  const inner = modelIndent + '    '  // e.g. 12 spaces
+  return outer + 'compat:\n' +
+    inner + 'supportsReasoningEffort: true\n' +
+    inner + 'supportsDeveloperRole: false\n' +
+    inner + 'supportsStore: false\n' +
+    inner + 'maxTokensField: max_tokens\n' +
+    outer + 'reasoningEfforts:\n' +
+    inner + 'off: null\n' +
+    inner + 'low: low\n' +
+    inner + 'medium: medium\n' +
+    inner + 'high: high\n' +
+    inner + 'xhigh: xhigh\n' +
+    inner + 'max: max'
+}
+
 function parsePiAiSections(text) {
   const lines = text.split(/\r?\n/)
   const sections = []
@@ -551,7 +572,10 @@ function parsePiAiSections(text) {
       sections.push(current); inModels = false; continue
     }
     if (current && ind === 6 && /^models\s*:/.test(trimmed)) { inModels = true; if (current.modelsStart < 0) current.modelsStart = i; continue }
-    if (current && inModels && /^- id:\s+(\S+)/.test(trimmed)) { current.models.push({ index: i, modelId: trimmed.match(/^- id:\s+(\S+)/)[1] }); continue }
+    if (current && inModels && ind >= 8 && /^- id:\s+(\S+)/.test(trimmed)) {
+      current.models.push({ start: i, end: -1, modelId: trimmed.match(/^- id:\s+(\S+)/)[1] })
+      continue
+    }
     if (ind === 0 && /^[A-Za-z0-9_-]+\s*\S*:/.test(trimmed) && !/^llm-pi-ai/.test(trimmed)) {
       if (current) finalizeSection(current, lines, i)
       inPiAi = false; inProviders = false; current = null; inModels = false; continue
@@ -561,17 +585,31 @@ function parsePiAiSections(text) {
   return sections
 }
 
+// 计算每个模型的结束行（下一个模型行的前一行为当前模型末尾）
+function finalizeModelEnds(sec) {
+  for (let i = 0; i < sec.models.length; i++) {
+    const m = sec.models[i]
+    const next = sec.models[i + 1]
+    m.end = next ? next.start - 1 : sec.modelsEnd
+  }
+}
+
 function finalizeSection(sec, lines, endIndex) {
-  if (sec.models.length === 0) { sec.modelsEnd = sec.modelsStart >= 0 ? sec.modelsStart : -1; return }
+  // 计算 section 的 modelsEnd（最后一个模型块的末尾）
+  if (sec.models.length === 0) {
+    sec.modelsEnd = sec.modelsStart >= 0 ? sec.modelsStart : -1
+    return
+  }
   const last = sec.models[sec.models.length - 1]
-  let end = last.index
-  for (let j = last.index + 1; j < lines.length && j < endIndex; j++) {
+  let end = last.start
+  for (let j = last.start + 1; j < lines.length && j < endIndex; j++) {
     const ind = indentOf(lines[j]), trimmed = lines[j].trim()
     if (trimmed === '' || trimmed.startsWith('#')) continue
     if (ind <= 6) break
     end = j
   }
   sec.modelsEnd = end
+  finalizeModelEnds(sec)
 }
 
 function modelHasReasoningEfforts(text, provider, modelId) {
@@ -580,9 +618,8 @@ function modelHasReasoningEfforts(text, provider, modelId) {
     if (sec.provider !== provider) continue
     for (const m of sec.models) {
       if (m.modelId !== modelId) continue
-      for (let j = m.index + 1; j <= sec.modelsEnd; j++) {
-        const ind = indentOf(lines[j]), trimmed = lines[j].trim()
-        if (ind <= 8 && /^- id:/.test(trimmed)) break
+      for (let j = m.start + 1; j <= m.end; j++) {
+        const trimmed = lines[j] ? lines[j].trim() : ''
         if (/^reasoningEfforts\s*:/.test(trimmed)) return true
       }
       return false
@@ -600,14 +637,24 @@ function mergeSettings(settingsPath, provider, models, dryRun) {
   const providerSection = sections.find(s => s.provider === provider)
 
   if (providerSection && providerSection.modelsEnd >= 0) {
-    for (const m of models) {
-      if (modelHasReasoningEfforts(text, provider, m)) continue
-      const block = modelBlock(m, m, '        ')
-      const ln = text.split(/\r?\n/); ln.splice(providerSection.modelsEnd + 1, 0, block)
+    for (const modelId of models) {
+      if (modelHasReasoningEfforts(text, provider, modelId)) continue
+      const targetModel = providerSection.models.find(m => m.modelId === modelId)
+      const ln = text.split(/\r?\n/)
+      if (targetModel) {
+        // Existing model: insert only compat + reasoningEfforts after its end
+        const indent = (ln[targetModel.start] || '').match(/^\s*/)[0]
+        const block = '\n' + declarationBlock(indent)
+        ln.splice(targetModel.end + 1, 0, block)
+      } else {
+        // New model: insert full modelBlock
+        const block = '\n' + modelBlock(modelId, modelId, '        ')
+        ln.splice(providerSection.modelsEnd + 1, 0, block)
+      }
       text = ln.join('\n'); needWrite = true
       sections = parsePiAiSections(text)
       const ns = sections.find(s => s.provider === provider)
-      if (ns) providerSection.modelsEnd = ns.modelsEnd
+      if (ns) { providerSection.models = ns.models; providerSection.modelsEnd = ns.modelsEnd }
     }
   } else if (providerSection) {
     const ln = text.split(/\r?\n/); const pIdx = ln.findIndex(l => indentOf(l) === 4 && l.trim().replace(/:$/, '') === provider)
@@ -732,7 +779,7 @@ function main() {
   // --- Off mode ---
   if (args.off) {
     log('\n[2/2] --off mode: no configuration files changed')
-    log('\nDone. pi-ai patch applied. Restart DSH to take effect.')
+    log('\nDone. Reasoning effort is enabled. Restart DSH to take effect.')
     return
   }
 
