@@ -1,6 +1,6 @@
 {
   "name": "dsh-reasoning-effort",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "DSH reasoning effort plugin — enables reasoning effort selection in the official model selector. Installable via `dsh plugin --profile web add`",
   "private": true,
   "main": "lib/index.js",
