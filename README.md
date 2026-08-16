@@ -16,31 +16,43 @@
 如果当前 Agent 可以执行终端命令，把下面这段话完整发送给它：
 
 ```text
-请为 DeepSeek Harness 的 web Profile 安装 dsh-reasoning-effort 插件。
+请帮我为 DeepSeek Harness 的 web Profile 安装推理强度插件。
 
-只执行下面两条命令，不要修改其他 Profile：
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+先检查一下是否已安装，运行：
 dsh --profile web --dump-config
 
-确认输出中出现 dsh-reasoning-effort 后告诉我安装结果。
-不要替我关闭或重启正在运行的 DSH；安装完成后提醒我手动重启 DSH Web Host。
+如果输出中已经有 dsh-reasoning-effort 条目，告诉我"已安装"即可，不用重复装。
+如果还没有，请帮我安装（只操作 web Profile，不要动其他 Profile）：
+dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+
+安装完成后，再运行确认一次：
+dsh --profile web --dump-config
+
+告诉我最终结果——配置里是否出现了 dsh-reasoning-effort。
+全程不要关闭或重启我当前正在运行的 DSH；安装完成后提醒我手动重启 DSH Web Host 才能生效。
 ```
 
-Agent 应当返回安装结果，并明确告诉你配置中是否已经出现 `dsh-reasoning-effort`。
+Agent 应当返回检查结果和安装状态。如果已经安装，它会告诉你"已安装"；如果刚装上，它会汇报配置中已出现 `dsh-reasoning-effort`。
 
 #### 给 Agent 的卸载提示词
 
 需要卸载时，把下面这段发给 Agent：
 
 ```text
-请为 DeepSeek Harness 的 web Profile 卸载 dsh-reasoning-effort 插件。
+请帮我从 DeepSeek Harness 的 web Profile 卸载推理强度插件。
 
-只执行下面两条命令，不要修改其他 Profile：
-dsh plugin --profile web remove dsh-reasoning-effort
+先检查一下是否已安装，运行：
 dsh --profile web --dump-config
 
-确认 dsh-reasoning-effort 已从输出中消失后告诉我卸载结果。
-不要替我关闭或重启正在运行的 DSH；卸载完成后提醒我手动重启 DSH Web Host。
+如果输出中已经没有 dsh-reasoning-effort 条目，告诉我"已卸载"即可。
+如果还有，请帮我移除（只操作 web Profile）：
+dsh plugin --profile web remove dsh-reasoning-effort
+
+然后再次确认：
+dsh --profile web --dump-config
+
+告诉我最终结果——dsh-reasoning-effort 是否已从配置中消失。
+全程不要关闭或重启 DSH；卸载完成后提醒我手动重启 DSH Web Host。
 ```
 
 #### 手动安装
