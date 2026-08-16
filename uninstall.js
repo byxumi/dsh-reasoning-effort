@@ -30,8 +30,8 @@ const os = require('os')
 //  Constants
 // ===========================================================================
 
-const PKG = 'dsh-win-reasoning'
-const VERSION = '1.1.7'
+const PKG = 'dsh-reasoning-effort'
+const VERSION = '1.3.9'
 const BACKUP_SUFFIX = '.dsh-reasoning.bak'
 const PI_AI_REL = path.join('@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
 
@@ -579,16 +579,43 @@ function main() {
     return
   }
 
-  // --- 2. Clean settings.yaml ---
+  // --- 2. Clean settings.yaml + remove from profile (one-shot full uninstall) ---
   const settingsPath = args.settings || defaultSettingsPath()
   console.log(`[2/2] settings: ${settingsPath}`)
 
   if (args.all) {
+    // Full uninstall: restore pi-ai (done in step 1) + clean settings + remove profile entry
     const r = cleanSettings(settingsPath, null, null, true, args.dryRun)
     if (r.status === 'no-settings') console.log('  settings.yaml not found')
     else if (r.status === 'noop') console.log('  no declarations found to remove')
     else if (r.status === 'would-clean') console.log('  🗑 would remove all compat/reasoningEfforts (dry-run)')
     else console.log('  🗑 all compat and reasoningEfforts removed')
+
+    // Remove from web profile
+    try {
+      const profileDir = path.join(os.homedir(), '.dsh', 'profiles', 'web')
+      const pkgPath = path.join(profileDir, 'package.json')
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+        let changed = false
+        if (pkg.dependencies && pkg.dependencies['dsh-reasoning-effort']) {
+          delete pkg.dependencies['dsh-reasoning-effort']
+          changed = true
+        }
+        if (pkg.dsh?.profile?.bundles) {
+          const i = pkg.dsh.profile.bundles.indexOf('dsh-reasoning-effort')
+          if (i >= 0) { pkg.dsh.profile.bundles.splice(i, 1); changed = true }
+        }
+        if (changed && !args.dryRun) {
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+          console.log('  🗑 removed dsh-reasoning-effort from web Profile manifest')
+        } else if (changed) {
+          console.log('  🗑 would remove dsh-reasoning-effort from web Profile manifest (dry-run)')
+        } else {
+          console.log('  (dsh-reasoning-effort not in web Profile manifest)')
+        }
+      }
+    } catch (_) { /* ignore */ }
   } else if (args.provider && args.models) {
     const models = args.models.split(',').map(s => s.trim()).filter(Boolean)
     const r = cleanSettings(settingsPath, args.provider, models, false, args.dryRun)
