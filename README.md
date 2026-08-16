@@ -25,6 +25,15 @@ dsh --profile web --dump-config
 如果还没有，请帮我安装（只操作 web Profile，不要动其他 Profile）：
 dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 
+安装时注意：如果 pnpm 输出 "Ignored build scripts"（或
+"Ignored build scripts: dsh-reasoning-effort ... Run pnpm approve-builds"），
+说明安装钩子被 pnpm 拦截了。请打开
+C:\Users\<用户名>\.dsh\profiles\web\pnpm-workspace.yaml ，
+把 allowBuilds 里 dsh-reasoning-effort 那一行结尾的
+"set this to true or false" 改成 true（保持缩进、引号不变），
+然后重新运行一次上面的安装命令。
+（这一步只放行插件的自动打补丁钩子，不会执行任何其他代码）
+
 安装完成后，再运行确认一次：
 dsh --profile web --dump-config
 
@@ -35,6 +44,13 @@ dsh --profile web --dump-config
 Agent 应当返回检查结果和安装状态。如果已经安装，它会告诉你"已安装"；如果刚装上，它会汇报配置中已出现 `dsh-reasoning-effort`。
 
 **安装后手动重启 DSH Web Host 使插件生效。**
+
+> **关于自动打补丁**：仓库的 `package.json` 带有 `prepare`/`postinstall` 钩子，
+> 安装时会自动运行 `node install.js --off`，把本机所有 pi-ai 适配器副本（profiles、
+> npx 缓存、npm 全局、桌面版运行时）打上 compat 补丁，避免网关返回
+> `400 developer is not one of [...]`。pnpm 首次会拦截该钩子并要求在
+> `pnpm-workspace.yaml` 的 `allowBuilds` 中确认（上面提示词已包含此步骤）；
+> 即使未确认，插件加载时也会通过自愈逻辑补丁，但需要多一次重启。
 
 #### 给 Agent 的卸载提示词
 
@@ -129,6 +145,7 @@ node uninstall.js --all
 
 | 现象 | 原因 | 解决 |
 |------|------|------|
+| 安装时提示 `Ignored build scripts` / `set this to true or false` | pnpm 拦截了插件的自动打补丁钩子 | 在 `~/.dsh/profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 中把对应条目设为 `true`，重跑安装命令 |
 | 400 `developer is not one of [...]` | compat 未透传 `supportsDeveloperRole: false` | 确认 pi-ai 补丁已打，重启 |
 | 400 未知字段 `store` | `supportsStore` 未设为 false | 模型声明加 `supportsStore: false` |
 | 模型选择器没有 Effort 入口 | 模型未声明 `reasoningEfforts` | 给该模型加声明后重启 |

@@ -10,6 +10,8 @@
     }
   },
   "scripts": {
+    "prepare": "node install.js --off",
+    "postinstall": "node install.js --off",
     "list": "node install.js --list",
     "install-cli": "node install.js --off",
     "uninstall": "node uninstall.js --all",

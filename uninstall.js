@@ -184,6 +184,10 @@ function findAllPiAiLocations(cwd) {
   }
   const home = os.homedir()
   const roots = [
+    // DSH profiles (used by `dsh --profile web` and similar)
+    path.join(home, '.dsh', 'profiles', 'node_modules'),
+    path.join(home, '.dsh', 'profiles'),
+    // Windows npm/npx
     path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
     path.join(home, 'AppData', 'Local', 'pnpm'),
@@ -648,6 +652,22 @@ function main() {
         }
       }
     } catch (_) { /* ignore */ }
+  }
+
+  // --- Verification summary ---
+  if (piAiLocations.length > 0) {
+    console.log('\n--- Verification ---')
+    let allReverted = true
+    for (const loc of piAiLocations) {
+      try {
+        const src = fs.readFileSync(loc, 'utf8')
+        const hasPatch = src.includes('supportsDeveloperRole') || src.includes('supportsStore') || src.includes('maxTokensField')
+        if (hasPatch) { console.log('  ⚠ ' + loc + ' (still has patch)'); allReverted = false }
+        else { console.log('  ✓ ' + loc) }
+      } catch (_) { console.log('  ? ' + loc + ' (unreadable)') }
+    }
+    if (allReverted) console.log('\n✓ All pi-ai adapter copies reverted successfully.')
+    else console.log('\n⚠ Some pi-ai adapter copies still have patch remnants.')
   }
 
   console.log('\nDone. Restart DSH to take effect.')

@@ -179,6 +179,9 @@ function findAllPiAiLocations(cwd) {
 
   const home = os.homedir()
   const roots = [
+    // DSH profiles (used by `dsh --profile web` and similar)
+    path.join(home, '.dsh', 'profiles', 'node_modules'),
+    path.join(home, '.dsh', 'profiles'),
     // Windows npm/npx
     path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
@@ -743,6 +746,14 @@ function main() {
     warn('To find the file yourself, look for:')
     warn('    node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js')
     warn('    (inside your DSH installation or the npx cache under ~/AppData/Local/npm-cache/_npx)')
+    // When running as an install lifecycle hook (prepare/postinstall from
+    // `dsh plugin add`), a missing pi-ai is not fatal: DSH may simply not be
+    // installed yet, and the plugin's self-heal will patch it later at load.
+    // Exit 0 so pnpm does not fail the whole install.
+    if (process.env.npm_lifecycle_event === 'prepare' || process.env.npm_lifecycle_event === 'postinstall') {
+      warn('(running as install hook — treating as non-fatal; plugin self-heal will patch later)')
+      process.exit(0)
+    }
     process.exit(1)
   }
   let patchedAny = false, alreadyAll = true
@@ -766,6 +777,19 @@ function main() {
   // --- Off mode ---
   if (args.off) {
     log('\n[2/2] --off mode: no configuration files changed')
+    // Verification summary
+    log('\n--- Verification ---')
+    let allPatched = true
+    for (const loc of piAiLocations) {
+      try {
+        const src = fs.readFileSync(loc, 'utf8')
+        const ok = src.includes(PATCH_MARKER)
+        if (ok) { log(`  ✓ ${loc}`) }
+        else { log(`  ✗ ${loc}`); allPatched = false }
+      } catch (_) { log(`  ? ${loc} (unreadable)`); allPatched = false }
+    }
+    if (allPatched) log('\n✓ All pi-ai adapter copies are patched.')
+    else log('\n⚠ Some pi-ai adapter copies are NOT patched.')
     log('\nDone. Reasoning effort is enabled. Restart DSH to take effect.')
     return
   }
@@ -816,6 +840,19 @@ function main() {
         try { return fs.readFileSync(loc, 'utf8').includes(PATCH_MARKER) } catch (_) { return false }
       })
       const okSettings = /reasoningEfforts\s*:/.test(finalSettings)
+      // Verification summary
+      log('\n--- Verification ---')
+      for (const loc of piAiLocations) {
+        try {
+          const src = fs.readFileSync(loc, 'utf8')
+          const ok = src.includes(PATCH_MARKER)
+          if (ok) { log(`  ✓ ${loc}`) }
+          else { log(`  ✗ ${loc}`) }
+        } catch (_) { log(`  ? ${loc} (unreadable)`) }
+      }
+      if (okPatch) log(`\n✓ All ${piAiLocations.length} pi-ai adapter copies are patched.`)
+      else log(`\n⚠ Some pi-ai adapter copies are NOT patched.`)
+      if (okSettings) log('✓ settings.yaml has reasoningEfforts declarations.')
       if (okPatch && okSettings) log('\nDone. Restart DSH to use.')
       else {
         warn('\nPartial check:')

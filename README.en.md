@@ -25,6 +25,15 @@ If dsh-reasoning-effort already appears in the output, just tell me "already ins
 If not, install it (only modify the web Profile, leave others alone):
 dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 
+NOTE: If pnpm prints "Ignored build scripts" (or "Ignored build scripts:
+dsh-reasoning-effort ... Run pnpm approve-builds"), it means pnpm blocked the
+auto-patch hook. Open:
+C:\Users\<username>\.dsh\profiles\web\pnpm-workspace.yaml
+and change the allowBuilds line for dsh-reasoning-effort that says
+"set this to true or false" to true (keep indentation unchanged), then
+re-run the install command above. This only allows the plugin's auto-patch
+hook — no other code is executed.
+
 After installation, verify again:
 dsh --profile web --dump-config
 
@@ -35,6 +44,15 @@ Do NOT shut down or restart the running DSH process; remind me to manually resta
 The Agent should check first, then install if needed, and report the final status.
 
 **After installation, manually restart the DSH Web Host for the plugin to take effect.**
+
+> **About auto-patching**: the repo's `package.json` has `prepare`/`postinstall` hooks
+> that automatically run `node install.js --off` during installation, which patches
+> all pi-ai adapter copies (profiles, npx cache, npm global, desktop runtime) with
+> the compat fields — preventing `400 developer is not one of [...]` errors.
+> pnpm blocks the hook on first install and requires you to approve it in
+> `pnpm-workspace.yaml` `allowBuilds` (the prompt above covers this step).
+> Even if you skip the approval, the plugin self-heals at load time
+> (but requires an extra restart).
 
 #### Prompt for Agent (uninstall)
 
@@ -125,6 +143,7 @@ node uninstall.js --all
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Install prints `Ignored build scripts` / `set this to true or false` | pnpm blocked the auto-patch hook | Set the entry to `true` in `~/.dsh/profiles/web/pnpm-workspace.yaml` `allowBuilds`, re-run the install command |
 | 400 `developer is not one of [...]` | compat not forwarding `supportsDeveloperRole: false` | Ensure pi-ai patch is applied, restart |
 | 400 unknown `store` | `supportsStore` not false | Add `supportsStore: false` |
 | No Effort entry | model missing `reasoningEfforts` | Add declaration and restart |
