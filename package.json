@@ -1,6 +1,6 @@
 {
   "name": "dsh-reasoning-effort",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "DSH reasoning effort plugin — enables reasoning effort selection in the official model selector. Installable via `dsh plugin --profile web add`",
   "private": true,
   "main": "lib/index.js",
@@ -10,14 +10,14 @@
     }
   },
   "scripts": {
-    "install": "node install.js --off",
     "list": "node install.js --list",
+    "install-cli": "node install.js --off",
     "uninstall": "node uninstall.js --all",
-    "remove": "node uninstall.js --all",
     "help": "node install.js --help"
   },
   "files": [
     "lib/index.js",
+    "lib/patch.js",
     "patch.yml",
     "install.js",
     "install.bat",
