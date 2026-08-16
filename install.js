@@ -434,8 +434,9 @@ function applyPiAiPatch(indexPath, dryRun) {
   }
 
   // --- Patch head: add variable declarations and extend the if condition ---
-  // Find the `const supportsReasoningEffort` line inside the function
-  const headLines = []
+  // IMPORTANT: preserve ALL lines before the function — only the function body
+  // is modified. Copy lines[0..fnIdx-1] verbatim first.
+  const headLines = lines.slice(0, fnIdx)
   let insertedHead = false
   for (let i = fnIdx; i < lines.length; i++) {
     const line = lines[i]
