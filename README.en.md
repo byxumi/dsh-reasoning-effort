@@ -2,6 +2,9 @@
 
 **English** | [中文](README.md)
 
+> [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+> [![GitHub Repo](https://img.shields.io/github/stars/byxumi/dsh-reasoning-effort?style=social)](https://github.com/byxumi/dsh-reasoning-effort)
+
 A DSH plugin that enables **reasoning effort selection** in the official model selector. Works with any provider and any model. Install with one `dsh plugin` command.
 
 ---
@@ -132,3 +135,9 @@ node uninstall.js --all
 ## License
 
 [MIT](LICENSE)
+
+## Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security](SECURITY.md)
