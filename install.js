@@ -125,29 +125,99 @@ EXAMPLES:
 //  Pi-ai adapter locator
 // ===========================================================================
 
+function piAiCandidate(pkgRoot) {
+  return path.join(pkgRoot, '@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
+}
+
+// DFS scan for the pi-ai package inside a cache root.
+// Checks <dir>/@deepseek-ai/... and <dir>/node_modules/@deepseek-ai/... at each level.
+function scanForPiAi(root, depth, maxDepth) {
+  if (depth > maxDepth) return null
+  try {
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    for (const e of entries) {
+      if (!e.isDirectory()) continue
+      const p = path.join(root, e.name)
+      // node_modules at this level
+      if (e.name === 'node_modules') {
+        const direct = piAiCandidate(p)
+        if (fs.existsSync(direct)) return direct
+        // descent into node_modules subfolders (pnpm virtual store style)
+        const found = scanForPiAi(p, depth + 1, maxDepth + 1)
+        if (found) return found
+        continue
+      }
+      // direct @deepseek-ai check inside every folder
+      const direct = piAiCandidate(p)
+      if (fs.existsSync(direct)) return direct
+      // descend
+      const found = scanForPiAi(p, depth + 1, maxDepth)
+      if (found) return found
+    }
+  } catch (_) { /* ignore */ }
+  return null
+}
+
 function findPiAiIndex(cwd) {
+  // 1) search up the directory tree from cwd (project-local installs)
   let dir = path.resolve(cwd)
   for (;;) {
-    const c = path.join(dir, 'node_modules', '@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
+    const c = path.join(dir, 'node_modules', piAiCandidate(''))
     if (fs.existsSync(c)) return c
     const p = path.dirname(dir)
     if (p === dir) break
     dir = p
   }
-  for (const base of [
-    path.join(os.homedir(), 'AppData', 'Local', 'npm-cache', '_npx'),
-    path.join(os.homedir(), '.npm', '_npx'),
-    path.join(os.homedir(), '.local', 'share', 'pnpm'),
-  ]) {
+
+  // 2) known global / cache roots across platforms
+  const home = os.homedir()
+  const roots = [
+    // Windows npm/npx
+    path.join(home, 'AppData', 'Local', 'npm-cache', '_npx'),
+    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules'),
+    path.join(home, 'AppData', 'Local', 'pnpm', 'store'),
+    // macOS / Linux npm
+    path.join(home, '.npm', '_npx'),
+    path.join(home, '.npm', 'node_modules'),
+    path.join('/usr', 'local', 'lib', 'node_modules'),
+    path.join('/usr', 'local', 'share', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm'),
+    path.join('/opt', 'homebrew', 'lib', 'node_modules'),
+    path.join('/usr', 'local', 'lib', 'node_modules'),
+    // pnpm global
+    path.join(home, 'Library', 'pnpm'),
+    path.join(home, '.local', 'share', 'pnpm', 'global'),
+    path.join(home, '.pnpm-store'),
+    // yarn
+    path.join(home, '.config', 'yarn', 'global', 'node_modules'),
+    path.join(home, '.yarn'),
+    // scoop / chocolatey
+    path.join(home, 'scoop', 'apps'),
+    path.join('C:', 'ProgramData', 'chocolatey', 'lib'),
+  ]
+
+  for (const base of roots) {
     if (!fs.existsSync(base)) continue
     try {
-      const entries = fs.readdirSync(base)
-      for (const e of entries) {
-        const c = path.join(base, e, 'node_modules', '@deepseek-ai', 'dsh-llm-pi-ai', 'lib', 'index.js')
-        if (fs.existsSync(c)) return c
-      }
+      // direct hit: <base>/@deepseek-ai/dsh-llm-pi-ai/lib/index.js
+      const direct = piAiCandidate(base)
+      if (fs.existsSync(direct)) return direct
+      // DFS two levels deep: covers npx hash dirs, pnpm virtual stores,
+      // scoop apps and chocolatey lib dirs.
+      const found = scanForPiAi(base, 0, 2)
+      if (found) return found
     } catch (_) { /* ignore */ }
   }
+
+  // 3) try resolving via npm / node itself
+  try {
+    const globalRoot = require('child_process').execSync('npm root -g', { encoding: 'utf8', timeout: 15000 }).trim()
+    if (globalRoot) {
+      const c = piAiCandidate(globalRoot)
+      if (fs.existsSync(c)) return c
+    }
+  } catch (_) { /* ignore */ }
+
   return null
 }
 
@@ -359,8 +429,19 @@ function main() {
   // --- Step 1: pi-ai patch ---
   let piAiIndex = args.piAi || findPiAiIndex(cwd)
   if (!piAiIndex) {
-    warn('@deepseek-ai/dsh-llm-pi-ai not found. Use --pi-ai to specify the path.')
-    warn('Expected: <dsh>/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js')
+    warn('@deepseek-ai/dsh-llm-pi-ai not found.')
+    warn('')
+    warn('This tool patches the pi-ai adapter bundled with DSH (DeepSeek Harness).')
+    warn('If DSH is not installed yet, first install and run it once:')
+    warn('    npm install -g @deepseek-ai/dsh')
+    warn('    dsh --version')
+    warn('')
+    warn('If DSH is installed but the package is in a custom location, point to it:')
+    warn('    node install.js --pi-ai "C:/path/to/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js"')
+    warn('')
+    warn('To find the file yourself, look for:')
+    warn('    node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js')
+    warn('    (inside your DSH installation or the npx cache under ~/AppData/Local/npm-cache/_npx)')
     process.exit(1)
   }
   log(`[1/2] pi-ai adapter: ${piAiIndex}`)
