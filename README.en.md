@@ -1,4 +1,4 @@
-# dsh-reasoning-effort
+﻿# dsh-reasoning-effort
 
 **English** | [中文](README.md)
 
@@ -52,8 +52,7 @@ Then verify again:
 dsh --profile web --dump-config
 
 Tell me the result — whether dsh-reasoning-effort has disappeared from the config.
-If reasoning effort declarations still remain in settings.yaml, also run (optional):
-node uninstall.js --all
+Note: this command auto-cleans pi-ai patches, settings.yaml declarations, and Profile config — all in one step.
 Do NOT shut down or restart the DSH process; remind me to manually restart the DSH Web Host when done.
 ```
 
