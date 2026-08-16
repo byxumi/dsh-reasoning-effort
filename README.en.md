@@ -1,4 +1,4 @@
-﻿# dsh-reasoning-effort
+# dsh-reasoning-effort
 
 **English** | [中文](README.md)
 
@@ -39,21 +39,12 @@ The Agent should check first, then install if needed, and report the final statu
 To uninstall, send the following:
 
 ```text
-Could you help me remove the reasoning-effort plugin from the DeepSeek Harness "web" Profile?
+Could you help me fully uninstall the reasoning-effort plugin from DeepSeek Harness?
 
-First, check whether it's still there:
-dsh --profile web --dump-config
+Run this single command (cleans pi-ai patches, settings.yaml declarations, and Profile config — all in one step):
+node uninstall.js --all
 
-If dsh-reasoning-effort is already gone, just tell me "already uninstalled" and stop.
-If it's still there, remove it (only modify the web Profile):
-dsh plugin --profile web remove dsh-reasoning-effort
-
-Then verify again:
-dsh --profile web --dump-config
-
-Tell me the result — whether dsh-reasoning-effort has disappeared from the config.
-Note: this command auto-cleans pi-ai patches, settings.yaml declarations, and Profile config — all in one step.
-Do NOT shut down or restart the DSH process; remind me to manually restart the DSH Web Host when done.
+Tell me the result and remind me to restart the DSH Web Host.
 ```
 
 #### Manual install
