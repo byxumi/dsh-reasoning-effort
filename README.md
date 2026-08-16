@@ -23,7 +23,7 @@ dsh --profile web --dump-config
 
 如果输出中已经有 dsh-reasoning-effort 条目，告诉我"已安装"即可，不用重复装。
 如果还没有，请帮我安装（只操作 web Profile，不要动其他 Profile）：
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 
 安装完成后，再运行确认一次：
 dsh --profile web --dump-config
@@ -60,7 +60,7 @@ dsh --profile web --dump-config
 也可以自己打开终端执行：
 
 ```bash
-dsh plugin --profile web add github:HanaAyane/dsh-reasoning-effort#main
+dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
 dsh --profile web --dump-config
 ```
 
