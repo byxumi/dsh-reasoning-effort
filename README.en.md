@@ -34,6 +34,8 @@ Do NOT shut down or restart the running DSH process; remind me to manually resta
 
 The Agent should check first, then install if needed, and report the final status.
 
+**After installation, manually restart the DSH Web Host for the plugin to take effect.**
+
 #### Prompt for Agent (uninstall)
 
 To uninstall, send the following:
@@ -47,25 +49,6 @@ node uninstall.js --all
 Tell me the result and remind me to restart the DSH Web Host.
 ```
 
-#### Manual install
-
-You can also run the commands yourself:
-
-```bash
-dsh plugin --profile web add github:byxumi/dsh-reasoning-effort#main
-dsh --profile web --dump-config
-```
-
-If the `github:` syntax fails due to network restrictions, use the codeload URL:
-
-```bash
-dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
-```
-
-If pnpm blocks build scripts, add the corresponding key under `allowBuilds` in `pnpm-workspace.yaml` and retry.
-
-**After installation, manually restart the DSH Web Host for the plugin to take effect.**
-
 #### What the Agent receives
 
 After the plugin is installed and DSH restarts, the Agent automatically gains:
@@ -74,15 +57,6 @@ After the plugin is installed and DSH restarts, the Agent automatically gains:
 2. **System prompt injection** — a Reasoning Effort section is added to every conversation's system prompt
 
 After installation, ask the Agent in a new session: *"Can you control reasoning effort?"* — it will confirm it knows the feature and guide you.
-
-### Method 2: Manual script (non-plugin)
-
-```bash
-# Windows: double-click install.bat
-# or command line:
-node install.js --off                    # patch pi-ai only
-node install.js --provider your-gateway --models model-a,model-b   # write model declarations
-```
 
 ### Features
 
