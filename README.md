@@ -33,6 +33,21 @@ dsh --profile web --dump-config
 
 **安装完成后，手动重启 DSH Web Host 使插件生效。**
 
+#### Agent 获得的提示词
+
+插件安装并重启后，Agent 会自动获得以下提示词能力：
+
+1. **注册 `reasoning-effort` skill**——模型可调用它查看完整使用说明，包括：
+   - 各等级（Off/Low/Medium/High/XHigh/Max）的适用场景表
+   - 如何通过模型选择器调整推理强度
+   - Agent 自身无法直接改推理强度，只能**建议用户**通过 UI 调整
+
+2. **系统提示词注入**——每次对话的系统提示中加入 Reasoning Effort 段落，Agent 会主动知道：
+   - 推理强度是由用户在输入框的模型选择器 Effort 菜单中控制的
+   - 当用户要求加深/减浅思考时，Agent 应引导用户调整 Effort 设置
+
+安装后，你可以在新会话中直接问 Agent：*"你能控制推理强度吗？"*，Agent 会回答它知道这个功能并指导你使用。
+
 ### 安装方式二：codeload 源码包（网络受限时）
 
 若 `github:byxumi/dsh-reasoning-effort#main` 因网络限制失败，codeload.github.com 通常可达：
