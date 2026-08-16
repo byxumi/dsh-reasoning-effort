@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Test artifacts
+_test-*.yaml
+*.test.yaml
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local settings & secrets — never commit real API keys or user configs
+settings.yaml
+*.dsh-reasoning.bak

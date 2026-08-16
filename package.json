@@ -1,0 +1,20 @@
+{
+  "name": "dsh-reasoning-effort-setup",
+  "version": "1.0.0",
+  "description": "DSH 推理强度 (reasoning effort) 安装工具：为 dsh-llm-pi-ai 打 compat 透传补丁，并在 settings.yaml 声明模型推理等级，让官方模型选择器支持 Effort 选择。通用、不绑定特定模型供应商。",
+  "private": true,
+  "bin": {
+    "install-reasoning-effort": "install.js"
+  },
+  "scripts": {
+    "install": "node install.js"
+  },
+  "files": [
+    "install.js",
+    "install.bat",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "keywords": ["dsh", "deepseek-harness", "reasoning-effort", "pi-ai"]
+}
