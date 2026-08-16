@@ -27,6 +27,33 @@ dsh --profile web --dump-config
 
 安装后重启 DSH，模型选择器弹出菜单会出现 **Effort（推理等级）** 入口。
 
+### 网络限制的替代安装方式（推荐）
+
+若你的网络环境无法直连 GitHub（`github:byxumi/dsh-reasoning-effort#main` 安装失败），
+可以用 **codeload 源码包 URL** 安装（codeload.github.com 通常可访问）：
+
+```bash
+# 用 codeload tarball URL 代替 github: 语法
+dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
+
+# 若 pnpm 提示构建脚本需批准，编辑 pnpm-workspace.yaml：
+# 在 allowBuilds 中添加对应 key 设为 true
+# 然后重新运行 add 命令
+```
+
+验证是否已作为 profile layer 挂载：
+
+```bash
+dsh --profile web --dump-config
+```
+
+输出中应看到：
+```
+# == dsh-reasoning-effort
+- id: reasoning-effort
+  name: dsh-reasoning-effort
+```
+
 ### 安装方式二：手动脚本（无需成为插件）
 
 ```bash
@@ -121,6 +148,23 @@ dsh --profile web --dump-config
 ```
 
 Restart DSH. The model selector dropdown shows an **Effort** entry with 6 levels (off/low/medium/high/xhigh/max).
+
+### Alternative: codeload tarball (recommended for restricted networks)
+
+If `github:byxumi/dsh-reasoning-effort#main` fails due to network restrictions, use:
+
+```bash
+dsh plugin --profile web add https://codeload.github.com/byxumi/dsh-reasoning-effort/tar.gz/main
+```
+
+If pnpm blocks build scripts, approve the package in `pnpm-workspace.yaml` under `allowBuilds`, then re-run.
+
+Verify with `dsh --profile web --dump-config` — you should see:
+```
+# == dsh-reasoning-effort
+- id: reasoning-effort
+  name: dsh-reasoning-effort
+```
 
 ### Manual install (non-plugin)
 
