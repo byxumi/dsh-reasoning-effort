@@ -34,8 +34,8 @@ const os = require('os')
 //  Constants
 // ===========================================================================
 
-const PKG = 'dsh-win-reasoning'
-const VERSION = '1.0.0'
+const PKG = 'dsh-reasoning-effort'
+const VERSION = '1.4.1'
 
 const PATCH_MARKER = 'supportsDeveloperRole === void 0 ? {} : { supportsDeveloperRole }'
 
